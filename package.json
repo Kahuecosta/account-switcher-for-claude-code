@@ -1,0 +1,341 @@
+{
+  "name": "claude-code-account-switcher",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.1.0",
+  "publisher": "YOUR_PUBLISHER_ID",
+  "author": {
+    "name": "YOUR NAME"
+  },
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1F2328",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher/issues"
+  },
+  "homepage": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher#readme",
+  "keywords": [
+    "claude",
+    "claude code",
+    "anthropic",
+    "account",
+    "switcher",
+    "multi-account",
+    "profile",
+    "CLAUDE_CONFIG_DIR",
+    "rate limit",
+    "usage"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "AI"
+  ],
+  "pricing": "Free",
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./extension.js",
+  "l10n": "./l10n",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "check": "node --check extension.js && node scripts/check-l10n.js",
+    "package": "npx --yes @vscode/vsce@3 package",
+    "publish:vsce": "npx --yes @vscode/vsce@3 publish",
+    "publish:ovsx": "npx --yes ovsx@0 publish"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeAccounts.switch",
+        "title": "%cmd.switch%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.add",
+        "title": "%cmd.add%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.manage",
+        "title": "%cmd.manage%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.setRepoDefault",
+        "title": "%cmd.setRepoDefault%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.clearRepoDefault",
+        "title": "%cmd.clearRepoDefault%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.toggleHistorySharing",
+        "title": "%cmd.toggleHistorySharing%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.importExisting",
+        "title": "%cmd.importExisting%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.switchToPrevious",
+        "title": "%cmd.switchToPrevious%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.addRule",
+        "title": "%cmd.addRule%",
+        "category": "Claude Accounts"
+      },
+      {
+        "command": "claudeAccounts.showUsage",
+        "title": "%cmd.showUsage%",
+        "category": "Claude Accounts"
+      }
+    ],
+    "configuration": {
+      "title": "Account Switcher for Claude Code",
+      "properties": {
+        "claudeAccounts.scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "user"
+          ],
+          "enumDescriptions": [
+            "%cfg.scope.workspace%",
+            "%cfg.scope.user%"
+          ],
+          "default": "workspace",
+          "description": "%cfg.scope%"
+        },
+        "claudeAccounts.accountsRoot": {
+          "type": "string",
+          "default": "",
+          "description": "%cfg.accountsRoot%"
+        },
+        "claudeAccounts.sharedItems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "settings.json",
+            "CLAUDE.md",
+            "agents",
+            "commands",
+            "skills",
+            "hooks",
+            "output-styles",
+            "plugins"
+          ],
+          "description": "%cfg.sharedItems%"
+        },
+        "claudeAccounts.shareHistory": {
+          "type": "boolean",
+          "default": false,
+          "description": "%cfg.shareHistory%"
+        },
+        "claudeAccounts.historyItems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "projects",
+            "history.jsonl",
+            "file-history",
+            "todos",
+            "plans"
+          ],
+          "description": "%cfg.historyItems%"
+        },
+        "claudeAccounts.autoApplyRepoDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.autoApplyRepoDefault%"
+        },
+        "claudeAccounts.reloadBehavior": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "always",
+            "never"
+          ],
+          "default": "ask",
+          "description": "%cfg.reloadBehavior%"
+        },
+        "claudeAccounts.applyToTerminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.applyToTerminal%"
+        },
+        "claudeAccounts.loginCommand": {
+          "type": "string",
+          "default": "claude auth login",
+          "description": "%cfg.loginCommand%"
+        },
+        "claudeAccounts.statusBarStyle": {
+          "type": "string",
+          "enum": [
+            "name",
+            "initials",
+            "icon"
+          ],
+          "enumDescriptions": [
+            "%cfg.statusBarStyle.name%",
+            "%cfg.statusBarStyle.initials%",
+            "%cfg.statusBarStyle.icon%"
+          ],
+          "default": "name",
+          "description": "%cfg.statusBarStyle%"
+        },
+        "claudeAccounts.showPlan": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.showPlan%"
+        },
+        "claudeAccounts.rules": {
+          "type": "array",
+          "default": [],
+          "description": "%cfg.rules%",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "account"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "%cfg.rules.pattern%"
+              },
+              "account": {
+                "type": "string",
+                "description": "%cfg.rules.account%"
+              }
+            }
+          }
+        },
+        "claudeAccounts.suggestSwitchOnLimit": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.suggestSwitchOnLimit%"
+        },
+        "claudeAccounts.gravatar": {
+          "type": "boolean",
+          "default": false,
+          "description": "%cfg.gravatar%"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "claudeAccounts.switchToPrevious",
+        "key": "ctrl+alt+shift+a",
+        "mac": "cmd+alt+shift+a"
+      }
+    ],
+    "colors": [
+      {
+        "id": "claudeAccounts.orange",
+        "description": "%color.orange%",
+        "defaults": {
+          "dark": "#E8915B",
+          "light": "#C2621F",
+          "highContrast": "#E8915B",
+          "highContrastLight": "#C2621F"
+        }
+      },
+      {
+        "id": "claudeAccounts.green",
+        "description": "%color.green%",
+        "defaults": {
+          "dark": "#7BC67E",
+          "light": "#2E8B3A",
+          "highContrast": "#7BC67E",
+          "highContrastLight": "#2E8B3A"
+        }
+      },
+      {
+        "id": "claudeAccounts.blue",
+        "description": "%color.blue%",
+        "defaults": {
+          "dark": "#6CA8F0",
+          "light": "#1F64C2",
+          "highContrast": "#6CA8F0",
+          "highContrastLight": "#1F64C2"
+        }
+      },
+      {
+        "id": "claudeAccounts.purple",
+        "description": "%color.purple%",
+        "defaults": {
+          "dark": "#B48EF0",
+          "light": "#7A3FD1",
+          "highContrast": "#B48EF0",
+          "highContrastLight": "#7A3FD1"
+        }
+      },
+      {
+        "id": "claudeAccounts.pink",
+        "description": "%color.pink%",
+        "defaults": {
+          "dark": "#F08DC0",
+          "light": "#C2337E",
+          "highContrast": "#F08DC0",
+          "highContrastLight": "#C2337E"
+        }
+      },
+      {
+        "id": "claudeAccounts.yellow",
+        "description": "%color.yellow%",
+        "defaults": {
+          "dark": "#E6C84F",
+          "light": "#9A7B00",
+          "highContrast": "#E6C84F",
+          "highContrastLight": "#9A7B00"
+        }
+      },
+      {
+        "id": "claudeAccounts.teal",
+        "description": "%color.teal%",
+        "defaults": {
+          "dark": "#5BC2B4",
+          "light": "#16806F",
+          "highContrast": "#5BC2B4",
+          "highContrastLight": "#16806F"
+        }
+      },
+      {
+        "id": "claudeAccounts.red",
+        "description": "%color.red%",
+        "defaults": {
+          "dark": "#F07B7B",
+          "light": "#C22F2F",
+          "highContrast": "#F07B7B",
+          "highContrastLight": "#C22F2F"
+        }
+      }
+    ]
+  }
+}
