@@ -113,7 +113,7 @@
       }
     ],
     "configuration": {
-      "title": "Account Switcher for Claude Code",
+      "title": "Multi-Account Switcher for Claude Code",
       "properties": {
         "claudeAccounts.scope": {
           "type": "string",

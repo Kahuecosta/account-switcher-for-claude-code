@@ -1,5 +1,5 @@
 {
-  "displayName": "Account Switcher for Claude Code",
+  "displayName": "Multi-Account Switcher for Claude Code",
   "description": "Alterne contas do Claude Code por janela ou por repositório sem tocar no ~/.claude. Perfis compartilhados ou isolados e histórico compartilhado opcional.",
   "cmd.switch": "Trocar conta",
   "cmd.add": "Adicionar conta",

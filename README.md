@@ -1,4 +1,4 @@
-# Account Switcher for Claude Code
+# Multi-Account Switcher for Claude Code
 
 Switch between multiple Claude Code accounts in VS Code **per window or per repository**, without modifying your `~/.claude` folder.
 
