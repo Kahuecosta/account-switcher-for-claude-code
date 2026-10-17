@@ -8,7 +8,7 @@
 | `YOUR NAME` | `package.json`, `LICENSE` | Já preenchido: `Kahuê Costa` |
 | `YOUR_GITHUB_USER` | `package.json` | Já preenchido: `Kahuecosta` |
 
-O ID final da extensão será `<publisher>.account-switcher-for-claude-code`.
+O ID final da extensão será `<publisher>.claude-code-account-switcher`.
 
 ## 2. Criar o repositório no GitHub
 
