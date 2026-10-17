@@ -31,6 +31,7 @@ test('activation: migrates 1.0 data, applies account + per-account env, clears o
   write(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'me@work.com', organizationName: 'ACME' } }));
 
   await ext.activate(context);
+  await I.startupDone();
 
   assert.deepStrictEqual(context.globalState.get('accounts')[0], { id: 'work', dir, mode: 'isolated' });
   assert.strictEqual(context.globalState.get('accountMeta').work.name, 'Work');

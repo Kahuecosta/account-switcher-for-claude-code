@@ -3,9 +3,9 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "1.1.0",
-  "publisher": "YOUR_PUBLISHER_ID",
+  "publisher": "kahuecosta",
   "author": {
-    "name": "YOUR NAME"
+    "name": "Kahuê Costa"
   },
   "license": "MIT",
   "icon": "images/icon.png",
@@ -15,12 +15,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher.git"
+    "url": "https://github.com/Kahuecosta/claude-code-account-switcher.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher/issues"
+    "url": "https://github.com/Kahuecosta/claude-code-account-switcher/issues"
   },
-  "homepage": "https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher#readme",
+  "homepage": "https://github.com/Kahuecosta/claude-code-account-switcher#readme",
   "keywords": [
     "claude",
     "claude code",
@@ -129,11 +129,13 @@
           "description": "%cfg.scope%"
         },
         "claudeAccounts.accountsRoot": {
+          "scope": "application",
           "type": "string",
           "default": "",
           "description": "%cfg.accountsRoot%"
         },
         "claudeAccounts.sharedItems": {
+          "scope": "application",
           "type": "array",
           "items": {
             "type": "string"
@@ -156,6 +158,7 @@
           "description": "%cfg.shareHistory%"
         },
         "claudeAccounts.historyItems": {
+          "scope": "application",
           "type": "array",
           "items": {
             "type": "string"
@@ -190,6 +193,7 @@
           "description": "%cfg.applyToTerminal%"
         },
         "claudeAccounts.loginCommand": {
+          "scope": "application",
           "type": "string",
           "default": "claude auth login",
           "description": "%cfg.loginCommand%"

@@ -377,7 +377,7 @@ function brokenShares(account) {
 
 function removeAccountDir(dir) {
   // Remove links before deleting so ~/.claude is never followed into.
-  if (!fs.existsSync(dir) || samePath(dir, homeClaudeDir())) return;
+  if (!fs.existsSync(dir) || samePath(dir, homeClaudeDir()) || samePath(dir, os.homedir()) || path.dirname(path.resolve(dir)) === path.resolve(dir)) return;
   for (const entry of fs.readdirSync(dir)) {
     const p = path.join(dir, entry);
     try { if (fs.lstatSync(p).isSymbolicLink()) removeLink(p); } catch { /* ignore */ }
@@ -567,7 +567,7 @@ async function startLimitWatcher(context) {
   const onFile = async (uri) => {
     const entries = await tail.readNew(uri.fsPath);
     const hit = entries.find((o) => isRateLimitEntry(o) && Date.now() - (Date.parse(o.timestamp) || Date.now()) < 15 * 60e3);
-    if (hit) onLimitReached(account);
+    if (hit) onLimitReached(account).catch(() => null);
   };
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), pattern));
   context.subscriptions.push(watcher, watcher.onDidChange(onFile), watcher.onDidCreate(onFile));
@@ -916,7 +916,7 @@ async function cmdAppearance(a) {
 async function cmdEditEnv(a) {
   for (;;) {
     const env = { ...(getEnvMap()[a.id] || {}) };
-    const items = Object.entries(env).map(([k, v]) => ({ label: k, description: v, key: k }));
+    const items = Object.entries(env).map(([k, v]) => ({ label: k, description: /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(k) ? '••••••••' : v, key: k }));
     items.push({ label: '$(add) ' + t('Add variable...'), key: null });
     const p = await vscode.window.showQuickPick(items, {
       placeHolder: t('Environment variables of "{0}" (kept on this machine only)', a.name),
@@ -958,12 +958,20 @@ async function remove(a) {
   if (!choice) return;
   const wasCurrent = selectedAccount().id === a.id;
   await saveRecords(getRecords().filter((x) => x.id !== a.id));
-  const map = getRepoDefaults();
+  const map = { ...getRepoDefaults() };
   for (const k of Object.keys(map)) if (map[k] === a.id) delete map[k];
   await saveRepoDefaults(map);
+  // Drop everything stored for this id so a new account with the same name starts clean.
   const envMap = { ...getEnvMap() };
   delete envMap[a.id];
   await ctx.globalState.update(K_ENV, envMap);
+  const meta = { ...getMeta() };
+  delete meta[a.id];
+  await ctx.globalState.update(K_META, meta);
+  if (a.avatar) fs.rmSync(storageDir('avatars', a.avatar), { force: true });
+  const avatars = { ...getAvatars() };
+  delete avatars[a.id];
+  await ctx.globalState.update(K_AVATARS, avatars);
   if (choice === deleteBtn) removeAccountDir(a.dir);
   updateStatus();
   if (wasCurrent) await selectAccount(defaultAccount(), t('previous account removed'));
@@ -1021,8 +1029,7 @@ async function cmdSetRepoDefault() {
   const r = await pick(allAccounts().map((a) => accountItem(a, { markCurrent: false, buttons: false })), t('Default account for {0}', currentRepo.label));
   if (!r) return;
   const acc = r.item.account;
-  const map = getRepoDefaults();
-  map[currentRepo.key] = acc.id;
+  const map = { ...getRepoDefaults(), [currentRepo.key]: acc.id };
   await saveRepoDefaults(map);
   await ctx.workspaceState.update(K_LAST_APPLIED, acc.id);
   updateStatus();
@@ -1033,7 +1040,7 @@ async function cmdSetRepoDefault() {
 async function cmdClearRepoDefault() {
   currentRepo = currentRepo || (await detectRepo());
   if (!currentRepo) return;
-  const map = getRepoDefaults();
+  const map = { ...getRepoDefaults() };
   delete map[currentRepo.key];
   await saveRepoDefaults(map);
   await ctx.workspaceState.update(K_LAST_APPLIED, undefined);
@@ -1072,7 +1079,7 @@ async function cmdAddRule() {
   }
   const r = await pick(allAccounts().map((a) => accountItem(a, { markCurrent: false, buttons: false })), t('Account for {0}', pattern));
   if (!r) return;
-  const rules = [...(cfg('rules') || []).filter((x) => x.pattern !== pattern), { pattern, account: r.item.account.id }];
+  const rules = [...(cfg('rules') || []).filter((x) => x?.pattern !== pattern), { pattern, account: r.item.account.id }];
   await vscode.workspace.getConfiguration('claudeAccounts').update('rules', rules, vscode.ConfigurationTarget.Global);
   await ctx.workspaceState.update(K_LAST_APPLIED, undefined);
   const editBtn = t('Edit rules');
@@ -1133,8 +1140,12 @@ async function cmdImport({ prompt = false } = {}) {
     if (res !== importBtn) return;
   }
   const src = homeClaudeDir();
+  const taken = new Set([DEFAULT_ID, ...getRecords().map((r) => r.id)]);
   const imported = found.map((d) => {
-    const id = path.basename(d);
+    const base = path.basename(d);
+    let id = base;
+    for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
+    taken.add(id);
     const shared = (cfg('sharedItems') || []).some((i) => isLinkedTo(path.join(d, i), path.join(src, i)));
     return { id, dir: d, mode: shared ? 'shared' : 'isolated' };
   });
@@ -1216,19 +1227,31 @@ async function activate(context) {
   currentRepo = await detectRepo();
   updateStatus();
   try {
+    await autoApply();
+    await startLimitWatcher(context);
+    await refreshAllIdentities();
+  } catch (e) {
+    vscode.window.showErrorMessage(`Account Switcher for Claude Code: ${e.message || e}`);
+  }
+  const usageTimer = setTimeout(() => refreshCurrentUsage(), 3000);
+  context.subscriptions.push({ dispose: () => clearTimeout(usageTimer) });
+  // Prompts wait for the user, so they must not hold activation (or the setup above) back.
+  startupPrompts = runStartupPrompts(context);
+}
+
+let startupPrompts = Promise.resolve();
+
+async function runStartupPrompts(context) {
+  try {
     if (!getRecords().length && !context.globalState.get(K_IMPORT_PROMPTED)) {
       await context.globalState.update(K_IMPORT_PROMPTED, true);
       await cmdImport({ prompt: true });
     }
-    await autoApply();
-    await startLimitWatcher(context);
-    await refreshAllIdentities();
     await checkOverridingSetting();
     await checkSharedHealth();
   } catch (e) {
     vscode.window.showErrorMessage(`Account Switcher for Claude Code: ${e.message || e}`);
   }
-  setTimeout(() => refreshCurrentUsage(), 3000);
 }
 
 function deactivate() {}
@@ -1239,5 +1262,6 @@ module.exports = {
   _internals: {
     normalizeRemote, slugify, initials, linkSharedItems, unlinkSharedItems, linkHistory, unlinkItems,
     isLinkedTo, removeAccountDir, brokenShares, findUnregisteredDirs, resolveDefault, desiredEnv,
+    startupDone: () => startupPrompts,
   },
 };

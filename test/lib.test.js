@@ -86,3 +86,11 @@ test('rate limit detection and tail reading', async () => {
   fs.appendFileSync(f, '3}\n');
   assert.deepStrictEqual(await tail.readNew(f), [{ c: 3 }]);
 });
+
+test('remote port is ignored and token counts never roll over to "1000k"', () => {
+  const { normalizeRemote } = require('../lib/rules');
+  const { formatTokens } = require('../lib/usage');
+  assert.strictEqual(normalizeRemote('ssh://git@github.com:22/org/repo.git'), 'github.com/org/repo');
+  assert.strictEqual(formatTokens(999600), '1.0M');
+  assert.strictEqual(formatTokens(1234), '1k');
+});

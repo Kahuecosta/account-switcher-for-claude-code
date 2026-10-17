@@ -4,9 +4,9 @@
 
 | Placeholder | Onde | O que colocar |
 | --- | --- | --- |
-| `YOUR_PUBLISHER_ID` | `package.json` | O ID do publisher que você vai criar no passo 3 (só letras, números e hífens) |
-| `YOUR NAME` | `package.json`, `LICENSE` | Seu nome |
-| `YOUR_GITHUB_USER` | `package.json` | Seu usuário ou organização no GitHub |
+| `YOUR_PUBLISHER_ID` | `package.json` | Já preenchido: `kahuecosta` (precisa ser o mesmo ID do publisher criado no passo 3) |
+| `Kahuê Costa` | `package.json`, `LICENSE` | Seu nome |
+| `Kahuecosta` | `package.json` | Seu usuário ou organização no GitHub |
 
 O ID final da extensão será `<publisher>.claude-code-account-switcher`.
 
@@ -15,7 +15,7 @@ O ID final da extensão será `<publisher>.claude-code-account-switcher`.
 ```bash
 git init && git add . && git commit -m "Initial release"
 git branch -M main
-git remote add origin https://github.com/YOUR_GITHUB_USER/claude-code-account-switcher.git
+git remote add origin https://github.com/Kahuecosta/claude-code-account-switcher.git
 git push -u origin main
 ```
 
@@ -30,7 +30,7 @@ O workflow **CI** roda checagens e testes em Linux, macOS e Windows, e gera um `
 ## 4. Open VSX (Cursor, VSCodium, Windsurf…)
 
 1. Entre em https://open-vsx.org com o GitHub, aceite o Publisher Agreement da Eclipse Foundation e gere um Access Token no seu perfil.
-2. Crie o namespace uma única vez: `npx ovsx create-namespace YOUR_PUBLISHER_ID -p <token>`.
+2. Crie o namespace uma única vez: `npx ovsx create-namespace kahuecosta -p <token>`.
 
 ## 5. Segredos no GitHub
 
