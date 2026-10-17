@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `YOUR_PUBLISHER_ID` | `package.json` | Já preenchido: `kahuecosta` (precisa ser o mesmo ID do publisher criado no passo 3) |
 | `Kahuê Costa` | `package.json`, `LICENSE` | Seu nome |
-| `Kahuecosta` | `package.json` | Seu usuário ou organização no GitHub |
+| `YOUR_GITHUB_USER` | `package.json` | Já preenchido: `Kahuecosta` |
 
 O ID final da extensão será `<publisher>.claude-code-account-switcher`.
 
