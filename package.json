@@ -15,12 +15,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Kahuecosta/claude-code-account-switcher.git"
+    "url": "https://github.com/Kahuecosta/account-switcher-for-claude-code.git"
   },
   "bugs": {
-    "url": "https://github.com/Kahuecosta/claude-code-account-switcher/issues"
+    "url": "https://github.com/Kahuecosta/account-switcher-for-claude-code/issues"
   },
-  "homepage": "https://github.com/Kahuecosta/claude-code-account-switcher#readme",
+  "homepage": "https://github.com/Kahuecosta/account-switcher-for-claude-code#readme",
   "keywords": [
     "claude",
     "claude code",

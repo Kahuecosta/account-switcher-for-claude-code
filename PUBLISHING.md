@@ -15,7 +15,7 @@ O ID final da extensão será `<publisher>.claude-code-account-switcher`.
 ```bash
 git init && git add . && git commit -m "Initial release"
 git branch -M main
-git remote add origin https://github.com/Kahuecosta/claude-code-account-switcher.git
+git remote add origin https://github.com/Kahuecosta/account-switcher-for-claude-code.git
 git push -u origin main
 ```
 
