@@ -48,7 +48,11 @@ suite('Multi-Account Switcher for Claude Code', () => {
         .getAccounts()
         .map((a) => `${a.id}=${a.name}`)
         .join(', ');
-    await until(() => ids() === 'it-a=IT A, it-b=IT B', 10000);
+    await until(() => ids() === 'it-a=IT A, it-b=IT B', 10000).catch(() => {
+      throw new Error(
+        `accounts never became visible; records: ${JSON.stringify(accounts.getRecords())}, meta: ${JSON.stringify(accounts.getMeta())}`
+      );
+    });
     await new Promise((r) => setTimeout(r, 1000));
     assert.strictEqual(ids(), 'it-a=IT A, it-b=IT B', 'accounts after setup');
   });
