@@ -21,23 +21,35 @@ function identityArgs(a) {
   return { dir, legacy };
 }
 
+// Reads an account's identity when its files changed. Resolves to the data, or undefined when unchanged.
 /** @param {Account} a */
-async function refreshIdentity(a) {
+async function readAccountIdentity(a) {
   const { dir, legacy } = identityArgs(a);
   const key = await mtimeKey(identityFiles(dir, legacy));
-  if (fileKeys.get(a.id) === key && accounts.getIdentity(a.id)) return false;
+  if (fileKeys.get(a.id) === key && accounts.getIdentity(a.id)) return undefined;
   const data = await readIdentity(dir, { legacyJsonPath: legacy });
   fileKeys.set(a.id, key);
-  const before = JSON.stringify(accounts.getIdentity(a.id));
-  await accounts.setIdentity(a.id, data);
-  return before !== JSON.stringify(accounts.getIdentity(a.id));
+  return data;
 }
 
+/** @param {Account} a */
+async function refreshIdentity(a) {
+  const data = await readAccountIdentity(a);
+  return data === undefined ? false : accounts.setIdentity(a.id, data);
+}
+
+// One storage write for every account that changed.
 async function refreshAllIdentities() {
   const all = accounts.allAccounts();
-  const changes = await Promise.all(all.map((a) => refreshIdentity(a).catch((e) => rt.log.warn(`Identity of ${a.id}: ${e}`))));
+  const read = await Promise.all(all.map((a) => readAccountIdentity(a).catch((e) => rt.log.warn(`Identity of ${a.id}: ${e}`))));
+  /** @type {Record<string, any>} */
+  const entries = {};
+  all.forEach((a, i) => {
+    if (read[i]) entries[a.id] = read[i];
+  });
+  const changed = await accounts.setIdentities(entries);
   if (cfg('gravatar')) await Promise.all(all.map((a) => ensureGravatar(a).catch(() => null)));
-  if (changes.some(Boolean) || cfg('gravatar')) notifyChanged();
+  if (changed || cfg('gravatar')) notifyChanged();
 }
 
 /** @param {Account} a */

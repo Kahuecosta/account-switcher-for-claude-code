@@ -196,11 +196,21 @@ async function removeAllEnv(id) {
 /** @param {string} id @returns {Identity | null} */
 const getIdentity = (id) => rt.ctx.globalState.get(K.IDENTITY, {})[id] || null;
 /** @param {string} id @param {Identity | null} data */
-async function setIdentity(id, data) {
-  const all = { ...rt.ctx.globalState.get(K.IDENTITY, {}) };
-  if (data) all[id] = { email: data.email, organization: data.organization, plan: data.plan, loggedIn: data.loggedIn };
-  else delete all[id];
+const setIdentity = (id, data) => setIdentities({ [id]: data });
+
+// Writes several identities at once, and only when something changed: every globalState write is
+// echoed back by VS Code, so fewer writes mean fewer moments with a stale view.
+/** @param {Record<string, Identity | null>} entries @returns {Promise<boolean>} whether anything changed */
+async function setIdentities(entries) {
+  const before = rt.ctx.globalState.get(K.IDENTITY, {});
+  const all = { ...before };
+  for (const [id, data] of Object.entries(entries)) {
+    if (data) all[id] = { email: data.email, organization: data.organization, plan: data.plan, loggedIn: data.loggedIn };
+    else delete all[id];
+  }
+  if (JSON.stringify(all) === JSON.stringify(before)) return false;
   await rt.ctx.globalState.update(K.IDENTITY, all);
+  return true;
 }
 
 // A credential kind other than a claude.ai login counts as signed in when its variables are set.
@@ -267,6 +277,7 @@ module.exports = {
   removeAllEnv,
   getIdentity,
   setIdentity,
+  setIdentities,
   isSignedIn,
   getLimits,
   setLimit,
