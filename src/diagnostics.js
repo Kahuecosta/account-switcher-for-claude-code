@@ -47,12 +47,6 @@ function authStatus(a) {
   });
 }
 
-/** @param {unknown} v */
-const cell = (v) =>
-  String(v ?? '')
-    .replace(/\|/g, '\\|')
-    .replace(/\n/g, ' ');
-
 // The report is in English on purpose: it is meant to be pasted into a GitHub issue.
 async function buildReport({ runAuthStatus = true } = {}) {
   const lines = [];
@@ -90,47 +84,38 @@ async function buildReport({ runAuthStatus = true } = {}) {
 
   add(`## Accounts`);
   add();
-  add(`| ${['Account', 'Kind', 'Mode', 'Folder', 'Login', 'claude auth status', 'Links', 'Limit', 'Quota'].join(' | ')} |`);
-  add(`|${' --- |'.repeat(9)}`);
   for (const a of accounts.allAccounts()) {
     const dir = accounts.configDirOf(a);
     const id = accounts.getIdentity(a.id);
     const signed = accounts.isSignedIn(a);
     const login =
       signed === false ? 'not logged in' : [maskEmail(id?.email), id?.plan].filter(Boolean).join(' · ') || (signed ? 'yes' : '?');
-    let auth = '—';
+    let auth = 'not run';
     if (runAuthStatus) {
       const s = await authStatus(a);
       if (s.error) auth = `⚠️ ${s.error}`;
       else {
         const dirOk = !s.configDirectory || samePath(s.configDirectory, dir);
-        auth = `${s.loggedIn === false ? 'logged out' : s.authMethod || 'logged in'}${dirOk ? '' : ` ⚠️ uses ${s.configDirectory}`}`;
+        auth = `${s.loggedIn === false ? 'logged out' : s.authMethod || 'logged in'}${dirOk ? '' : ` ⚠️ uses \`${s.configDirectory}\``}`;
       }
     }
     const broken = await profile.brokenShares(a).catch(() => []);
     const lim = accounts.activeLimit(a.id);
     const q = quota.quotaOf(a.id);
-    add(
-      `| ${[
-        `${a.name}${a.id === cur.id ? ' ✔' : ''} (\`${a.id}\`)`,
-        a.kind,
-        a.mode,
-        `\`${dir}\`${fs.existsSync(dir) ? '' : ` ⚠️ missing`}`,
-        login,
-        auth,
-        broken.length ? `⚠️ ${broken.join(', ')}` : '✔',
-        lim ? new Date(lim.until).toISOString() + (lim.estimated ? ` (estimated)` : '') : '—',
-        q
-          ? [q.fiveHour && `5h ${Math.round(q.fiveHour.usedPct)}%`, q.sevenDay && `7d ${Math.round(q.sevenDay.usedPct)}%`]
-              .filter(Boolean)
-              .join(' · ')
-          : '—',
-      ]
-        .map(cell)
-        .join(' | ')} |`
-    );
+    add(`### ${a.name}${a.id === cur.id ? ' (selected)' : ''}`);
+    add();
+    add(`- Id: \`${a.id}\` · kind: ${a.kind} · mode: ${a.mode}`);
+    add(`- Folder: \`${dir}\`${fs.existsSync(dir) ? '' : ' ⚠️ missing'}`);
+    add(`- Login: ${login}`);
+    add(`- claude auth status: ${auth}`);
+    add(`- Links: ${broken.length ? `⚠️ not linked: ${broken.join(', ')}` : 'OK'}`);
+    add(`- Usage limit: ${lim ? new Date(lim.until).toISOString() + (lim.estimated ? ' (estimated)' : '') : 'none'}`);
+    if (q) {
+      const parts = [q.fiveHour && `5h ${Math.round(q.fiveHour.usedPct)}%`, q.sevenDay && `7d ${Math.round(q.sevenDay.usedPct)}%`];
+      add(`- Quota: ${parts.filter(Boolean).join(' · ')}`);
+    }
+    add();
   }
-  add();
 
   add(`## Sharing`);
   add();
