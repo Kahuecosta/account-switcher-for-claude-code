@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.1.0
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). New entries are written by [release-please](https://github.com/googleapis/release-please) from Conventional Commits.
+
+## [1.1.0](https://github.com/Kahuecosta/account-switcher-for-claude-code/compare/3de1957...9edef53) (2026-10-17)
+
+### Features
 
 - Account identity: e-mail, plan and organization in the status bar, tooltip and picker. Only non-secret fields are read.
 - Per-account color (theme-aware palette), icon or emoji, and status-bar style (`name`, `initials`, `icon`).
@@ -14,7 +18,7 @@
 - Settings Sync for account names, colors, icons and repository defaults.
 - Data from 1.0 is migrated automatically.
 
-## 1.0.0
+## 1.0.0 (2026-10-17)
 
 First public release.
 
