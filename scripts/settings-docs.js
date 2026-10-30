@@ -20,6 +20,7 @@ const plain = (s) =>
   s
     .replace(/\[([^\]]+)\]\(command:[^)]+\)/g, '$1') // command links only work inside VS Code
     .replace(/`#([\w.]+)#`/g, '`$1`')
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/\n+/g, ' ');
 
