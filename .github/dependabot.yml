@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    # @types/vscode follows engines.vscode, the minimum supported VS Code version.
+    ignore:
+      - dependency-name: '@types/vscode'
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
