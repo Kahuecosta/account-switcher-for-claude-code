@@ -1,0 +1,60 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Run **Claude Accounts: Diagnose** first: it often points at the cause, and its report is the most useful thing to attach.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add an isolated account "Work"
+        2. Switch to it and reload
+        3. Run /status in the Claude Code panel
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: 'Output of **Claude Accounts: Diagnose**. E-mails are masked; check the folder paths before posting.'
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: 'Relevant lines from **Claude Accounts: Show log**.'
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      placeholder: '1.2.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: editor
+    attributes:
+      label: Editor
+      options: [VS Code, VS Code Insiders, Cursor, VSCodium, Windsurf, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux, WSL, Remote (SSH / Dev Container / Codespaces)]
+    validations:
+      required: true
