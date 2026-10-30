@@ -1,35 +1,40 @@
 name: Release
+
+# release-please keeps a release pull request up to date from Conventional Commits on main.
+# Merging it bumps the version, updates CHANGELOG.md, creates the tag and the GitHub release,
+# and then the extension is published.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  release-please:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          node-version: 22
-      - name: Check tag matches package.json version
-        run: |
-          v=$(node -p "require('./package.json').version")
-          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
-      - run: npm run check
-      - run: npm test
-      - run: npm run package
-      - name: Publish to VS Code Marketplace
-        run: npx --yes @vscode/vsce@3 publish --packagePath *.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      - name: Publish to Open VSX
-        run: npx --yes ovsx@0 publish *.vsix
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-      - name: GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: '*.vsix'
-          generate_release_notes: true
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      pre-release: false
+    secrets: inherit
