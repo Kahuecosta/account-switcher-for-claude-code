@@ -1,7 +1,14 @@
-.github/**
-test/**
-scripts/**
-PUBLISHING.md
-.gitignore
-*.vsix
-node_modules/**
+# Allow-list: only what the extension needs at runtime and on the Marketplace page.
+**
+!package.json
+!package.nls.json
+!package.nls.*.json
+!README.md
+!README.pt-BR.md
+!CHANGELOG.md
+!LICENSE
+!images/icon.png
+!l10n/**
+!media/**
+!src/**
+!lib/**
