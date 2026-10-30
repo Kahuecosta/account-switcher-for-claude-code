@@ -40,7 +40,7 @@ test('activation migrates 1.x data, applies the account, moves secrets, fixes th
   assert.strictEqual(process.env.CLAUDE_CONFIG_DIR, dir);
   assert.strictEqual(process.env.ANTHROPIC_MODEL, 'opus');
   assert.strictEqual(process.env.ANTHROPIC_API_KEY, 'sk-SECRET');
-  await ext._internals.startupDone();
+  await ext._internals.promptsDone();
 
   assert.deepStrictEqual(context.globalState.get('accounts')[0], { id: 'work', dir, mode: 'isolated' });
   assert.strictEqual(context.globalState.get('accountMeta').work.name, 'Work');

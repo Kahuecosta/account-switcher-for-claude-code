@@ -51,7 +51,7 @@ function setup(config = {}, opts = {}) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cas-')));
   process.env.HOME = home;
   process.env.USERPROFILE = home;
-  if (opts.originalEnv) process.env.CLAUDE_CONFIG_DIR = opts.originalEnv.replace('~', home);
+  if (opts.originalEnv) process.env.CLAUDE_CONFIG_DIR = path.join(home, ...opts.originalEnv.replace(/^~\/?/, '').split('/'));
   else delete process.env.CLAUDE_CONFIG_DIR;
 
   const defaults = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).contributes.configuration.properties;

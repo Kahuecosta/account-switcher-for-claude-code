@@ -41,6 +41,7 @@ function background(what, fn) {
 }
 
 let startup = Promise.resolve();
+let prompts = Promise.resolve();
 
 /** @param {vscode.ExtensionContext} context */
 function activate(context) {
@@ -175,17 +176,17 @@ function activate(context) {
   );
 
   statusBar.update();
-  startup = afterActivation(first, autoApplied, officialWasActive);
+  startup = afterActivation(first, autoApplied);
+  prompts = startup.then(() => startupPrompts(first, autoApplied, officialWasActive));
   return createApi();
 }
 
-// Everything that may wait: secrets, migration, identity, watchers, prompts.
+// Everything that may wait, except prompts: secrets, migration, identity, watchers.
 /**
  * @param {import('./accounts').Account} first
  * @param {import('./repo').ResolvedDefault | null} autoApplied
- * @param {boolean} officialWasActive
  */
-async function afterActivation(first, autoApplied, officialWasActive) {
+async function afterActivation(first, autoApplied) {
   try {
     if (accounts.secretsPending(first.id)) {
       await accounts.loadSecrets(first.id);
@@ -212,7 +213,15 @@ async function afterActivation(first, autoApplied, officialWasActive) {
   } catch (e) {
     reportError('startup', e);
   }
-  // Prompts wait for the user, so they come last and are not awaited by activation.
+}
+
+// Prompts wait for the user, so they run after the setup work and nothing waits for them.
+/**
+ * @param {import('./accounts').Account} first
+ * @param {import('./repo').ResolvedDefault | null} autoApplied
+ * @param {boolean} officialWasActive
+ */
+async function startupPrompts(first, autoApplied, officialWasActive) {
   if (autoApplied) {
     const msg = t('Claude Code account: {0} ({1}).', first.name, repo.reasonOf(autoApplied));
     if (officialWasActive) background('notice', () => switching.maybeReload(msg));
@@ -260,5 +269,5 @@ function deactivate() {}
 module.exports = {
   activate,
   deactivate,
-  _internals: { startupDone: () => startup, handleUri },
+  _internals: { startupDone: () => startup, promptsDone: () => prompts, handleUri },
 };

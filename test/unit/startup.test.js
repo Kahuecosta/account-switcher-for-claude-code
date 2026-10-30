@@ -44,7 +44,7 @@ test('a synced default with another e-mail is not applied to the wrong login', a
   assert.strictEqual(environment.state.startedWithId, '__default__', 'the running panel still uses the launch environment');
   assert.ok(environment.reloadPending('other'));
   env.respond = () => undefined;
-  await ext._internals.startupDone();
+  await ext._internals.promptsDone();
   assert.strictEqual(context.workspaceState.get('selectedAccount'), 'other');
   assert.strictEqual(context.workspaceState.get('lastAppliedRepoDefault'), 'other');
   assert.ok(
