@@ -8,9 +8,9 @@ const path = require('path');
 const vscode = require('vscode');
 
 const ID = 'kahuecosta.claude-code-multi-account';
-// Load the modules from the path VS Code loaded the extension from: on Windows the drive letter of
-// __dirname may differ in case, and Node would then create a second copy of every module.
-const mod = (name) => require(path.join(vscode.extensions.getExtension(ID).extensionPath, 'src', name));
+// The extension's own module instances, exposed to tests through its exports (CLAUDE_ACCOUNTS_TEST=1).
+let api;
+const mod = (name) => api.__test.mod(name);
 
 async function until(fn, ms = 20000) {
   const end = Date.now() + ms;
@@ -23,7 +23,6 @@ async function until(fn, ms = 20000) {
 }
 
 suite('Multi-Account Switcher for Claude Code', () => {
-  let api;
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cas-it-')));
   const dirA = path.join(tmp, 'a');
   const dirB = path.join(tmp, 'b');

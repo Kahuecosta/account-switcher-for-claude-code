@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "lib": ["ES2022"],
-    "types": ["node", "vscode", "mocha"],
+    "types": ["node", "vscode"],
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,

@@ -40,6 +40,11 @@ test('snapshot parsing: windows, expiry, formats', () => {
   assert.strictEqual(expired.sevenDay.resetsAt, Date.parse('2026-11-01T00:00:00Z'), 'ISO reset times are accepted');
   assert.strictEqual(sl.parseSnapshot(JSON.stringify({ model: {} }), 1, now), null, 'no rate_limits (API key, older Claude Code)');
   assert.strictEqual(sl.parseSnapshot('not json', 1, now), null);
+  assert.strictEqual(
+    sl.parseSnapshot('\uFEFF\uFEFF' + s({ seven_day: { used_percentage: 3 } }), 1, now).sevenDay.usedPct,
+    3,
+    'byte order marks are ignored'
+  );
   assert.strictEqual(sl.parseSnapshot(s({ five_hour: { used_percentage: 'x' } }), 1, now), null);
   assert.strictEqual(sl.peakUsage(null), null);
   assert.strictEqual(sl.parseSnapshot(s({ five_hour: { used_percentage: 140 } }), 1, now).fiveHour.usedPct, 100);
