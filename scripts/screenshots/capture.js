@@ -221,6 +221,42 @@ async function run() {
     '0',
     path.join(out, 'demo.gif'),
   ]);
+  // Social preview for the GitHub repository (1280x640): icon, name and a crop of the picker.
+  const crop = path.join(tmp, 'picker-crop.png');
+  execFileSync('convert', [picker, '-crop', '652x352+316+36', '+repage', '-resize', '540x', crop]);
+  const text = (font, size, color, x, y, s) => ['-font', font, '-pointsize', String(size), '-fill', color, '-annotate', `+${x}+${y}`, s];
+  execFileSync('convert', [
+    '-size',
+    '1280x640',
+    'xc:#1F2328',
+    '(',
+    path.join(out, 'icon.png'),
+    '-resize',
+    '128x128',
+    ')',
+    '-geometry',
+    '+80+70',
+    '-composite',
+    ...text('DejaVu-Sans-Bold', 52, '#F0F3F6', 80, 282, 'Multi-Account'),
+    ...text('DejaVu-Sans-Bold', 52, '#F0F3F6', 80, 346, 'Switcher for'),
+    ...text('DejaVu-Sans-Bold', 52, '#E8915B', 80, 410, 'Claude Code'),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 478, 'Per-window and per-repository accounts'),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 516, 'Plan, usage limits and live quota'),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 554, 'One-click switch at the limit'),
+    '(',
+    crop,
+    '-bordercolor',
+    '#3D444D',
+    '-border',
+    '2',
+    ')',
+    '-geometry',
+    '+660+168',
+    '-composite',
+    '-depth',
+    '8',
+    path.join(out, 'social-preview.png'),
+  ]);
   console.log(`Screenshots written to ${path.join(out, 'screenshots')} and ${path.join(out, 'demo.gif')}`);
 }
 

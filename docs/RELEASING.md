@@ -20,6 +20,8 @@ Run **Actions → Release → Run workflow** with an existing tag, and check **p
 
 ### GitHub
 
+[`scripts/setup-github.sh`](../scripts/setup-github.sh) applies every repository setting below, plus topics, Discussions, merge options, security features and a ruleset for `main` (run it as a repository admin after `gh auth login`). By hand:
+
 - **Settings → Actions → General → Workflow permissions**: check **Allow GitHub Actions to create and approve pull requests** (release-please needs it).
 - **Settings → Environments → New environment** named `release`. Optionally add yourself as a required reviewer, so nothing is published without your approval, and limit it to the `main` branch and `v*` tags.
 
