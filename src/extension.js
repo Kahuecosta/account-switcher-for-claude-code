@@ -178,7 +178,11 @@ function activate(context) {
   statusBar.update();
   startup = afterActivation(first, autoApplied);
   prompts = startup.then(() => startupPrompts(first, autoApplied, officialWasActive));
-  return createApi();
+  const api = createApi();
+  // Integration tests (CLAUDE_ACCOUNTS_TEST, see .vscode-test.mjs) get the extension's own module
+  // instances: requiring them by path can load second copies (e.g. drive-letter case on Windows).
+  if (process.env.CLAUDE_ACCOUNTS_TEST === '1') return { ...api, __test: { mod: (/** @type {string} */ name) => require(`./${name}`) } };
+  return api;
 }
 
 // Everything that may wait, except prompts: secrets, migration, identity, watchers.
