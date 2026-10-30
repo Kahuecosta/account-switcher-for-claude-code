@@ -8,8 +8,9 @@ const path = require('path');
 const vscode = require('vscode');
 
 const ID = 'kahuecosta.claude-code-multi-account';
-const root = path.join(__dirname, '..', '..');
-const mod = (name) => require(path.join(root, 'src', name));
+// Load the modules from the path VS Code loaded the extension from: on Windows the drive letter of
+// __dirname may differ in case, and Node would then create a second copy of every module.
+const mod = (name) => require(path.join(vscode.extensions.getExtension(ID).extensionPath, 'src', name));
 
 async function until(fn, ms = 20000) {
   const end = Date.now() + ms;
@@ -31,6 +32,7 @@ suite('Multi-Account Switcher for Claude Code', () => {
     const ext = vscode.extensions.getExtension(ID);
     assert.ok(ext, 'extension found');
     api = await ext.activate();
+    await mod('extension')._internals.startupDone(); // startup work must not race with the setup below
     fs.mkdirSync(dirA);
     fs.mkdirSync(dirB);
     const accounts = mod('accounts');
@@ -40,6 +42,8 @@ suite('Multi-Account Switcher for Claude Code', () => {
     ]);
     await accounts.updateMeta('it-a', { name: 'IT A' });
     await accounts.updateMeta('it-b', { name: 'IT B' });
+    const ids = accounts.getAccounts().map((a) => `${a.id}=${a.name}`);
+    assert.deepStrictEqual(ids, ['it-a=IT A', 'it-b=IT B'], `accounts after setup: ${ids.join(', ')}`);
   });
 
   suiteTeardown(async () => {

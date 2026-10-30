@@ -46,7 +46,8 @@ test('logging in to another account uses only that account, with strictEnv', asy
   assert.strictEqual(term.options.env.ANTHROPIC_MODEL, 'sonnet');
   assert.strictEqual(term.options.isTransient, true);
   assert.deepStrictEqual(term.sent, ['claude auth login']);
-  assert.strictEqual(term.options.env.PATH, process.env.PATH, 'a complete environment');
+  const pathKey = Object.keys(term.options.env).find((k) => k.toUpperCase() === 'PATH'); // "Path" on Windows
+  assert.strictEqual(term.options.env[pathKey], process.env.PATH, 'a complete environment');
   assert.ok(!('ELECTRON_RUN_AS_NODE' in term.options.env), 'extension-host variables are removed');
   assert.ok(!('VSCODE_IPC_HOOK' in term.options.env));
   assert.strictEqual(term.options.env.VSCODE_PORTABLE, '/kept', 'like VS Code, VSCODE_PORTABLE is kept');
