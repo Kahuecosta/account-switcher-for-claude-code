@@ -41,8 +41,16 @@ suite('Multi-Account Switcher for Claude Code', () => {
     ]);
     await accounts.updateMeta('it-a', { name: 'IT A' });
     await accounts.updateMeta('it-b', { name: 'IT B' });
-    const ids = accounts.getAccounts().map((a) => `${a.id}=${a.name}`);
-    assert.deepStrictEqual(ids, ['it-a=IT A', 'it-b=IT B'], `accounts after setup: ${ids.join(', ')}`);
+    // VS Code echoes every globalState write back to the extension host, which can briefly show an
+    // older snapshot: wait until the accounts are visible and stay visible.
+    const ids = () =>
+      accounts
+        .getAccounts()
+        .map((a) => `${a.id}=${a.name}`)
+        .join(', ');
+    await until(() => ids() === 'it-a=IT A, it-b=IT B', 10000);
+    await new Promise((r) => setTimeout(r, 1000));
+    assert.strictEqual(ids(), 'it-a=IT A, it-b=IT B', 'accounts after setup');
   });
 
   suiteTeardown(async () => {
