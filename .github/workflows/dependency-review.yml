@@ -1,0 +1,26 @@
+name: Dependency review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          # GHSA-xcx6-jx8p-x3h5 (@azure/msal-node, via @vscode/vsce -> @azure/identity): affects the interactive
+          # authorization code flow, which publishing does not use (it uses the Azure CLI / OIDC credential).
+          # The fix is in msal-node 7, which @azure/identity does not accept yet. Remove once vsce updates.
+          allow-ghsas: GHSA-xcx6-jx8p-x3h5
+          comment-summary-in-pr: on-failure

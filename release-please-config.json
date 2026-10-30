@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "9edef53043e06f9bd93cea744781ec5e0390f58a",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "claude-code-multi-account",
+      "changelog-path": "CHANGELOG.md",
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "refactor", "section": "Internal", "hidden": true },
+        { "type": "test", "section": "Internal", "hidden": true },
+        { "type": "build", "section": "Internal", "hidden": true },
+        { "type": "ci", "section": "Internal", "hidden": true },
+        { "type": "chore", "section": "Internal", "hidden": true }
+      ]
+    }
+  }
+}
