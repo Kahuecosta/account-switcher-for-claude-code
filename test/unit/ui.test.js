@@ -144,7 +144,8 @@ test('the diagnostics report masks e-mails and stays in English', async () => {
   assert.ok(report.includes('d***@acme.com'));
   assert.ok(!report.includes('dev@acme.com'));
   assert.match(report, /## Accounts/);
-  assert.match(report, /\| Work \[\*\] ✔ \(`work`\) \| subscription \| shared \|/);
+  assert.match(report, /### Work \[\*\] \(selected\)/);
+  assert.match(report, /- Id: `work` · kind: subscription · mode: shared/);
 });
 
 test('appearance: emoji validation uses graphemes', async () => {
