@@ -187,6 +187,8 @@ The extension runs where Claude Code runs: on the remote machine for Remote-SSH,
 - **Every window uses the same account**: `CLAUDE_CONFIG_DIR` is set in `claudeCode.environmentVariables`. That setting applies to every window; the extension detects it and offers to remove only that entry.
 - **macOS**: credentials are kept in the Keychain, one entry per account folder. **Diagnose** runs `claude auth status` for each account to confirm the logins are separate.
 - **A shared item stopped syncing**: a tool replaced the link with a copy. The extension detects this and offers **Relink**, keeping the local version as `.bak-<date>`.
+- **Chats from one account don't show up in another**: shared profiles and **Relink** share configuration only; each account keeps its own history. Run **Claude Accounts: Share / stop sharing history across accounts** to share conversations, then reload the window. The Claude Code panel lists past conversations from the account's `projects` folder, which history sharing links.
+- **Switching without reloading the window**: the Claude Code extension reads the account when the window loads and has no command to restart its sessions, so the panel needs a reload. Set `claudeAccounts.reloadBehavior` to `always` to reload right after choosing an account, use **Open terminal as account** for another account in a terminal, or keep one window per account.
 - Anything else: run **Claude Accounts: Diagnose**, check **Claude Accounts: Show log**, and [open an issue](https://github.com/Kahuecosta/account-switcher-for-claude-code/issues/new/choose) with the report (e-mails are masked).
 
 ## Known limitations
