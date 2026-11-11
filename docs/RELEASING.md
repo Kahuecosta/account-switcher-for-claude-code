@@ -38,30 +38,30 @@ Run **Actions → Release → Run workflow** with an existing tag, and check **p
 
 The workflow runs `vsce publish --oidc`: GitHub issues a short-lived OIDC token, the Marketplace exchanges it for a 15-minute credential, and nothing is stored. See [Publish Visual Studio Marketplace extensions securely with Trusted Publishing](https://developer.microsoft.com/blog/trusted-publishing-visual-studio-marketplace/).
 
-### Open VSX (trusted publishing)
+### Open VSX
 
-1. Sign in at <https://open-vsx.org> with GitHub.
-2. In your profile, sign the **Eclipse Foundation Open VSX Publisher Agreement** (it asks you to log in with, or create, an Eclipse account).
-3. Create the namespace once. Under **Settings → Access Tokens**, generate a token, then run:
+Open VSX accepts a trusted publisher only from the **owner** of the namespace, and only for an extension that already has a published version. So the first version goes out with a token, and trusted publishing takes over afterwards.
+
+1. Sign in at <https://open-vsx.org> with GitHub and sign the **Eclipse Foundation Open VSX Publisher Agreement** in your profile (it asks you to log in with, or create, an Eclipse account).
+2. Create the namespace once. Under **Settings → Access Tokens**, generate a token, then run:
 
    ```bash
    npx ovsx create-namespace kahuecosta -p <token>
    ```
 
-   Delete the token afterwards if you use trusted publishing.
+3. Claim ownership of the namespace: open a **Claim namespace ownership** issue at <https://github.com/EclipseFdn/open-vsx.org/issues/new/choose>, naming the namespace `kahuecosta` and linking this repository and the Marketplace listing. Until an owner is granted, the namespace shows a warning icon and extensions in it are marked unverified.
+4. Store the token as the `OVSX_PAT` secret of the `release` environment, so the first release can publish.
+5. Once you own the namespace and the extension is on Open VSX, open <https://open-vsx.org/user-settings/trusted-publishers>, choose the namespace `kahuecosta` and the provider **GitHub Actions**, and fill in: organization or user `Kahuecosta`, repository `account-switcher-for-claude-code`, workflow `release.yml`, environment `release`.
+6. Delete the `OVSX_PAT` secret (and revoke the token). The workflow then runs `ovsx publish --trusted-publishing`.
 
-4. Open <https://open-vsx.org/user-settings/trusted-publishers>, add a trusted publisher for the namespace `kahuecosta` with the provider **GitHub Actions**, and identify the workflow: repository `Kahuecosta/account-switcher-for-claude-code`, workflow file `release.yml`, environment `release` (the exact field names may differ slightly; the dialog lists them).
+See the [Open VSX trusted publishing guide](https://github.com/eclipse-openvsx/openvsx/wiki/Trusted-Publishing) and [namespace access](https://github.com/eclipse-openvsx/openvsx/wiki/Namespace-Access).
 
-The workflow runs `ovsx publish --trusted-publishing`. See the [Open VSX trusted publishing guide](https://github.com/eclipse-openvsx/openvsx/wiki/Trusted-Publishing).
+### Tokens
 
-Optionally, ask for the namespace to be verified (the "verified publisher" badge) by opening a [namespace access request](https://github.com/EclipseFdn/open-vsx.org/issues/new/choose).
-
-### Fallback: tokens
-
-If trusted publishing is not available for an account, set the repository variable `PUBLISH_AUTH` to `token` (**Settings → Secrets and variables → Actions → Variables**) and add these secrets to the `release` environment:
+Each registry publishes with a token whenever its secret exists in the `release` environment, and with trusted publishing otherwise:
 
 - `VSCE_PAT`: a Marketplace Personal Access Token. Azure DevOps stops accepting global Personal Access Tokens on 2026-12-01, so prefer trusted publishing.
-- `OVSX_PAT`: an Open VSX access token.
+- `OVSX_PAT`: an Open VSX access token (needed for the first version, see above).
 
 ## Checking a build locally
 

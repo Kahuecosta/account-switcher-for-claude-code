@@ -9,8 +9,9 @@ name: Release
 #   - VS Code Marketplace: a Trusted Publishing policy for this repository, workflow "release.yml",
 #     environment "release".
 #   - Open VSX: a trusted publisher for this repository and workflow.
-# Fallback: set the repository variable PUBLISH_AUTH to "token" and the secrets VSCE_PAT and OVSX_PAT
-# in the "release" environment.
+# Each registry falls back to a token when its secret is set in the "release" environment (VSCE_PAT,
+# OVSX_PAT): Open VSX needs one for the first version of an extension, before trusted publishing can
+# be registered. Remove the secret once trusted publishing works.
 on:
   push:
     branches: [main]
@@ -124,12 +125,11 @@ jobs:
         env:
           VSIX: ${{ needs.build.outputs.vsix }}
           PRE_RELEASE: ${{ needs.build.outputs.pre-release }}
-          PUBLISH_AUTH: ${{ vars.PUBLISH_AUTH }}
           TOKEN: ${{ secrets.VSCE_PAT }}
         run: |
           args=(publish --packagePath "$VSIX")
           if [ "$PRE_RELEASE" = "true" ]; then args+=(--pre-release); fi
-          if [ "$PUBLISH_AUTH" = "token" ]; then VSCE_PAT="$TOKEN" npx vsce "${args[@]}"; else npx vsce "${args[@]}" --oidc; fi
+          if [ -n "$TOKEN" ]; then VSCE_PAT="$TOKEN" npx vsce "${args[@]}"; else npx vsce "${args[@]}" --oidc; fi
 
   open-vsx:
     name: Open VSX
@@ -157,12 +157,11 @@ jobs:
         env:
           VSIX: ${{ needs.build.outputs.vsix }}
           PRE_RELEASE: ${{ needs.build.outputs.pre-release }}
-          PUBLISH_AUTH: ${{ vars.PUBLISH_AUTH }}
           TOKEN: ${{ secrets.OVSX_PAT }}
         run: |
           args=(publish --packagePath "$VSIX")
           if [ "$PRE_RELEASE" = "true" ]; then args+=(--pre-release); fi
-          if [ "$PUBLISH_AUTH" = "token" ]; then OVSX_PAT="$TOKEN" npx ovsx "${args[@]}"; else npx ovsx "${args[@]}" --trusted-publishing; fi
+          if [ -n "$TOKEN" ]; then OVSX_PAT="$TOKEN" npx ovsx "${args[@]}"; else npx ovsx "${args[@]}" --trusted-publishing; fi
 
   # Attaches the .vsix and its checksum to the GitHub release, even if a marketplace failed.
   github-release:
