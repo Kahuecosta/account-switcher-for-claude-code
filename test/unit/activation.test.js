@@ -42,17 +42,18 @@ test('activation migrates 1.x data, applies the account, moves secrets, fixes th
   assert.strictEqual(process.env.ANTHROPIC_API_KEY, 'sk-SECRET');
   await ext._internals.promptsDone();
 
-  assert.deepStrictEqual(context.globalState.get('accounts')[0], { id: 'work', dir, mode: 'isolated' });
-  assert.strictEqual(context.globalState.get('accountMeta').work.name, 'Work');
+  assert.deepStrictEqual(env.stored('accounts')[0], { id: 'work', dir, mode: 'isolated' });
+  assert.strictEqual(env.synced('accountMeta').work.name, 'Work');
+  assert.strictEqual(context.globalState.get('accountMeta').work.name, 'Work', 'mirrored for Settings Sync');
   assert.deepStrictEqual(context.globalState.synced, ['accountMeta', 'repoDefaults']);
-  assert.strictEqual(context.globalState.get('accountEnv'), undefined, '1.x variables were migrated');
-  assert.deepStrictEqual(context.globalState.get('accountEnvironment').work, {
+  assert.strictEqual(env.stored('accountEnv'), undefined, '1.x variables were migrated');
+  assert.deepStrictEqual(env.stored('accountEnvironment').work, {
     ANTHROPIC_MODEL: { value: 'opus' },
     ANTHROPIC_API_KEY: { secret: true },
   });
   assert.strictEqual(context.secrets.data['env:work:ANTHROPIC_API_KEY'], 'sk-SECRET');
-  assert.ok(!JSON.stringify(context.globalState.data).includes('sk-SECRET'), 'no secret left in plain storage');
-  assert.strictEqual(context.globalState.get('schemaVersion'), 3);
+  assert.ok(!env.plainStorage().includes('sk-SECRET'), 'no secret left in plain storage');
+  assert.strictEqual(env.stored('schemaVersion'), 3);
   assert.strictEqual(settings.claudeAccounts.onUsageLimit, 'ignore', 'suggestSwitchOnLimit=false is carried over');
 
   assert.strictEqual(process.env.CLAUDE_CONFIG_DIR, dir, 'account dir wins over a per-account CLAUDE_CONFIG_DIR');
@@ -65,9 +66,9 @@ test('activation migrates 1.x data, applies the account, moves secrets, fixes th
   assert.ok(watchers.length >= 1, 'limit watcher started');
   assert.ok(!messages.some((m) => /SECRET/.test(m.text || '')), 'tokens never surface');
 
-  assert.strictEqual(context.globalState.get('accountIdentity').work.email, 'me@work.com');
-  assert.strictEqual(context.globalState.get('accountIdentity').work.plan, 'Max 20x');
-  assert.ok(!JSON.stringify(context.globalState.get('accountIdentity')).includes('SECRET'));
+  assert.strictEqual(env.stored('accountIdentity').work.email, 'me@work.com');
+  assert.strictEqual(env.stored('accountIdentity').work.plan, 'Max 20x');
+  assert.ok(!JSON.stringify(env.stored('accountIdentity')).includes('SECRET'));
 
   // Public API.
   assert.strictEqual(api.apiVersion, 1);

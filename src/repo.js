@@ -8,6 +8,7 @@ const { repoInfo } = require('../lib/git');
 const { normalizeRemote, matchRule } = require('../lib/rules');
 const { caseInsensitive } = require('../lib/paths');
 const accounts = require('./accounts');
+const state = require('./state');
 
 /**
  * @typedef {{ folder: string, root: string | null, remote: string | null, key: string, label: string }} Repo
@@ -45,13 +46,22 @@ function detectRepos() {
 const getRepos = () => repos;
 const primaryRepo = () => repos[0] || null;
 
-/** @returns {Record<string, string | { id: string, email?: string }>} */
-const getRepoDefaults = () => rt.ctx.globalState.get(K.REPO_DEFAULTS, {});
+/** @returns {Record<string, { id: string, email?: string }>} */
+const getRepoDefaults = () => state.synced(K.REPO_DEFAULTS);
+
+// Replaces the whole map; only the entries that changed are stamped (Settings Sync merges per entry).
 /** @param {Record<string, any>} m */
-const saveRepoDefaults = async (m) => {
-  await rt.ctx.globalState.update(K.REPO_DEFAULTS, m);
+async function saveRepoDefaults(m) {
+  const before = getRepoDefaults();
+  const changes = {};
+  for (const k of Object.keys(before)) if (!(k in m)) changes[k] = null;
+  for (const [k, v] of Object.entries(m)) {
+    const value = typeof v === 'string' ? { id: v } : v;
+    if (JSON.stringify(before[k]) !== JSON.stringify(value)) changes[k] = value;
+  }
+  if (Object.keys(changes).length) await state.setSynced(K.REPO_DEFAULTS, changes);
   notifyChanged();
-};
+}
 
 // Finds the stored default for a key. Folder keys compare case-insensitively where the file system does.
 /** @param {string} key */

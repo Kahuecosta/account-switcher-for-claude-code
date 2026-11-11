@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const { rt, K, t, cfg, baseDir, baseJsonPath, lockPath, backupsDir, accountsRoot, notifyChanged } = require('./runtime');
 const accounts = require('./accounts');
+const state = require('./state');
 const links = require('../lib/links');
 const { withLock } = require('../lib/lock');
 const { mirrorMcpServers } = require('../lib/mcp');
@@ -272,17 +273,17 @@ async function saveRecordPatch(id, patch) {
 
 /** @param {string} id @param {string[] | null} names */
 async function setMirrored(id, names) {
-  const all = { ...rt.ctx.globalState.get(K.MCP_MIRRORED, {}) };
+  const all = { ...state.get(K.MCP_MIRRORED, {}) };
   if (names) all[id] = names;
   else delete all[id];
-  await rt.ctx.globalState.update(K.MCP_MIRRORED, all);
+  await state.update(K.MCP_MIRRORED, all);
 }
 
 // Copies the base profile's user-scope MCP servers into a shared-profile account.
 /** @param {Account} a */
 async function mirrorMcp(a) {
   if (!a.dir || a.mode !== 'shared' || !cfg('shareMcpServers')) return null;
-  const prev = rt.ctx.globalState.get(K.MCP_MIRRORED, {})[a.id] || [];
+  const prev = state.get(K.MCP_MIRRORED, {})[a.id] || [];
   const r = await mirrorMcpServers(baseJsonPath(), path.join(a.dir, '.claude.json'), prev);
   await setMirrored(a.id, r.mirrored);
   if (r.changed) rt.log.info(`MCP servers mirrored into ${a.id}: ${r.mirrored.join(', ') || '(none)'}`);

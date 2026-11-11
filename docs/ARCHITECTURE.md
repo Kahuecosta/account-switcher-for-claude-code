@@ -49,17 +49,21 @@ Deleting an account folder removes its top-level links first and then moves it t
 
 ## Storage
 
-| Key                                  | Store                                    | Content                                                                                                  |
-| ------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `accounts`                           | global                                   | `[{ id, dir, mode, kind }]`                                                                              |
-| `accountMeta`                        | global, synced                           | `{ [id]: { name, color, icon } }`                                                                        |
-| `repoDefaults`                       | global, synced                           | `{ [repoKey]: { id, email } }`                                                                           |
-| `accountEnvironment`                 | global                                   | `{ [id]: { NAME: { value } \| { secret: true } } }`; secret values in SecretStorage as `env:<id>:<NAME>` |
-| `accountIdentity`                    | global                                   | last known `{ email, plan, organization, loggedIn }`                                                     |
-| `accountLimits`                      | global                                   | `{ [id]: { at, until, kind } }`, shared by all windows                                                   |
-| `selectedAccount`, `previousAccount` | workspace (or global with `scope: user`) | account ids                                                                                              |
-| `lastAppliedRepoDefault`             | workspace                                | id of the repository default last applied in this workspace                                              |
-| `schemaVersion`                      | global                                   | storage version, see `src/migrations.js`                                                                 |
+VS Code keeps `globalState` as one JSON object per extension; every write is echoed back to the extension host, which replaces the whole object, and the next write sends the whole object again. A late echo of an older write can therefore undo a newer write for good. The extension's state therefore lives in **one file per key** under `<globalStorage>/state/`, written atomically and read fresh (other windows write the same files) — see `src/state.js`.
+
+| Key                                                                   | Content                                                                                                  |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `accounts`                                                            | `[{ id, dir, mode, kind }]`                                                                              |
+| `accountMeta`                                                         | synced: `{ [id]: { name, color, icon, _t } }`                                                            |
+| `repoDefaults`                                                        | synced: `{ [repoKey]: { id, email, _t } }`                                                               |
+| `accountEnvironment`                                                  | `{ [id]: { NAME: { value } \| { secret: true } } }`; secret values in SecretStorage as `env:<id>:<NAME>` |
+| `accountIdentity`                                                     | last known `{ email, plan, organization, loggedIn }`                                                     |
+| `accountLimits`                                                       | `{ [id]: { at, until, kind } }`, shared by all windows                                                   |
+| `accountAvatars`, `mcpMirrored`, `dismissedNotices`, `importPrompted` | small local flags and maps                                                                               |
+| `selectedAccount`, `previousAccount`                                  | with `claudeAccounts.scope: user`; otherwise in workspaceState (not shared, so not echoed)               |
+| `schemaVersion`                                                       | storage version, see `src/migrations.js`                                                                 |
+
+**Synced keys** (`accountMeta`, `repoDefaults`) are mirrored into `globalState` for Settings Sync. Every entry carries a timestamp (`_t`) and removals are kept as tombstones, so `state.pullSynced()` (at activation and when the window gets focus) merges both sides entry by entry with the newest entry winning; a mirror write lost to an echo is repaired by the next pull. On the first run of this storage, `state.init()` copies the `globalState` of earlier versions into the files.
 
 ## Tests
 

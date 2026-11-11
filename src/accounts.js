@@ -2,6 +2,7 @@
 // Account model: local records, synced metadata, per-account environment (secrets in SecretStorage),
 // last known identity and usage-limit state.
 const { rt, K, t, DEFAULT_ID, baseDir, store, notifyChanged } = require('./runtime');
+const state = require('./state');
 
 /**
  * @typedef {'subscription' | 'oauthToken' | 'apiKey' | 'bedrock' | 'vertex'} AccountKind
@@ -18,27 +19,34 @@ const BLOCKED_ENV =
 // ───────── records & metadata ─────────
 
 /** @returns {AccountRecord[]} */
-const getRecords = () => rt.ctx.globalState.get(K.ACCOUNTS, []);
+const getRecords = () => state.get(K.ACCOUNTS, []);
 /** @param {AccountRecord[]} list */
 const saveRecords = (list) =>
-  rt.ctx.globalState.update(
+  state.update(
     K.ACCOUNTS,
     list.map(({ id, dir, mode, kind }) => (kind && kind !== 'subscription' ? { id, dir, mode, kind } : { id, dir, mode }))
   );
 
 /** @returns {Record<string, { name?: string, color?: string, icon?: string }>} */
-const getMeta = () => rt.ctx.globalState.get(K.META, {});
+const getMeta = () => state.synced(K.META);
 /** @param {string} id @param {Record<string, any>} patch */
 async function updateMeta(id, patch) {
-  const meta = { ...getMeta() };
-  meta[id] = { ...(meta[id] || {}), ...patch };
-  for (const k of Object.keys(meta[id])) if (meta[id][k] === undefined) delete meta[id][k];
-  await rt.ctx.globalState.update(K.META, meta);
+  const entry = { ...(getMeta()[id] || {}), ...patch };
+  for (const k of Object.keys(entry)) if (entry[k] === undefined) delete entry[k];
+  await state.setSynced(K.META, { [id]: entry });
+  notifyChanged();
+}
+
+/** @param {string} id */
+async function removeMeta(id) {
+  await state.setSynced(K.META, { [id]: null });
   notifyChanged();
 }
 
 /** @returns {Record<string, string>} */
-const getAvatars = () => rt.ctx.globalState.get(K.AVATARS, {});
+const getAvatars = () => state.get(K.AVATARS, {});
+/** @param {Record<string, string>} m */
+const saveAvatars = (m) => state.update(K.AVATARS, m);
 
 /** @param {AccountRecord} rec @returns {Account} */
 function decorate(rec) {
@@ -94,7 +102,7 @@ function kindLabel(k) {
 const selectedAccount = () => findAccount(store().get(K.SELECTED)) || defaultAccount();
 
 // ───────── environment variables ─────────
-// Non-secret values live in globalState (never synced). Secret values live in SecretStorage and are
+// Non-secret values live in the state files (never synced). Secret values live in SecretStorage and are
 // cached in memory once loaded.
 
 /** @type {Map<string, Record<string, string>>} */
@@ -105,8 +113,8 @@ const secretKey = (/** @type {string} */ id, /** @type {string} */ name) => `env
 // activation after an update already applies them.
 /** @returns {Record<string, Record<string, { value?: string, secret?: boolean }>>} */
 function getEnvSpecs() {
-  const specs = rt.ctx.globalState.get(K.ENV, {});
-  const legacy = rt.ctx.globalState.get(K.ENV_V1);
+  const specs = state.get(K.ENV, {});
+  const legacy = state.get(K.ENV_V1);
   if (!legacy || typeof legacy !== 'object') return specs;
   const out = { ...specs };
   for (const [id, vars] of Object.entries(legacy)) {
@@ -166,7 +174,7 @@ async function setEnvVar(id, name, value, secret) {
     secretCache.set(id, cached);
   }
   specs[id] = spec;
-  await rt.ctx.globalState.update(K.ENV, specs);
+  await state.update(K.ENV, specs);
 }
 
 /** @param {string} id @param {string} name */
@@ -176,7 +184,7 @@ async function removeEnvVar(id, name) {
   if (spec[name]?.secret) await rt.ctx.secrets.delete(secretKey(id, name));
   delete spec[name];
   specs[id] = spec;
-  await rt.ctx.globalState.update(K.ENV, specs);
+  await state.update(K.ENV, specs);
   const cached = { ...(secretCache.get(id) || {}) };
   delete cached[name];
   secretCache.set(id, cached);
@@ -187,29 +195,28 @@ async function removeAllEnv(id) {
   for (const name of Object.keys(envSpec(id))) await removeEnvVar(id, name);
   const specs = { ...getEnvSpecs() };
   delete specs[id];
-  await rt.ctx.globalState.update(K.ENV, specs);
+  await state.update(K.ENV, specs);
   secretCache.delete(id);
 }
 
 // ───────── identity (non-secret, persisted so it is available synchronously at startup) ─────────
 
 /** @param {string} id @returns {Identity | null} */
-const getIdentity = (id) => rt.ctx.globalState.get(K.IDENTITY, {})[id] || null;
+const getIdentity = (id) => state.get(K.IDENTITY, {})[id] || null;
 /** @param {string} id @param {Identity | null} data */
 const setIdentity = (id, data) => setIdentities({ [id]: data });
 
-// Writes several identities at once, and only when something changed: every globalState write is
-// echoed back by VS Code, so fewer writes mean fewer moments with a stale view.
+// Writes several identities at once, and only when something changed.
 /** @param {Record<string, Identity | null>} entries @returns {Promise<boolean>} whether anything changed */
 async function setIdentities(entries) {
-  const before = rt.ctx.globalState.get(K.IDENTITY, {});
+  const before = state.get(K.IDENTITY, {});
   const all = { ...before };
   for (const [id, data] of Object.entries(entries)) {
     if (data) all[id] = { email: data.email, organization: data.organization, plan: data.plan, loggedIn: data.loggedIn };
     else delete all[id];
   }
   if (JSON.stringify(all) === JSON.stringify(before)) return false;
-  await rt.ctx.globalState.update(K.IDENTITY, all);
+  await state.update(K.IDENTITY, all);
   return true;
 }
 
@@ -223,18 +230,18 @@ function isSignedIn(a) {
   return id ? id.loggedIn : null; // null = unknown
 }
 
-// ───────── usage limits (shared by every window through globalState) ─────────
+// ───────── usage limits (shared by every window through the state files) ─────────
 
 const SESSION_WINDOW_MS = 5 * 3600e3;
 
 /** @returns {Record<string, { at: number, until: number | null, kind: string }>} */
-const getLimits = () => rt.ctx.globalState.get(K.LIMITS, {});
+const getLimits = () => state.get(K.LIMITS, {});
 /** @param {string} id @param {{ at: number, until: number | null, kind: string } | null} info */
 async function setLimit(id, info) {
   const all = { ...getLimits() };
   if (info) all[id] = info;
   else delete all[id];
-  await rt.ctx.globalState.update(K.LIMITS, all);
+  await state.update(K.LIMITS, all);
   notifyChanged();
 }
 
@@ -256,7 +263,9 @@ module.exports = {
   saveRecords,
   getMeta,
   updateMeta,
+  removeMeta,
   getAvatars,
+  saveAvatars,
   decorate,
   defaultAccount,
   getAccounts,

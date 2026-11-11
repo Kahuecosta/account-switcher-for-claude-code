@@ -310,6 +310,14 @@ function setup(config = {}, opts = {}) {
     rt.ORIGINAL_ENV = process.env.CLAUDE_CONFIG_DIR;
     return rt;
   };
+  // State files written by the extension (src/state.js), and everything it stored in plain text.
+  const stored = (key) => load('state').get(key);
+  const synced = (key) => load('state').synced(key);
+  const plainStorage = () => {
+    const dir = path.join(context.globalStorageUri.fsPath, 'state');
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).map((f) => fs.readFileSync(path.join(dir, f), 'utf8')) : [];
+    return JSON.stringify(context.globalState.data) + files.join('\n');
+  };
   // Disposes what activate() registered (timers, watchers), so the test process can exit.
   const dispose = () => {
     for (const d of context.subscriptions.splice(0)) d?.dispose?.();
@@ -317,6 +325,9 @@ function setup(config = {}, opts = {}) {
   // The returned object is also the control object the stub reads (respond, pickQuick, inputs...).
   return Object.assign(env, {
     dispose,
+    stored,
+    synced,
+    plainStorage,
     home,
     claude: path.join(home, '.claude'),
     root: path.join(home, '.claude-accounts'),
