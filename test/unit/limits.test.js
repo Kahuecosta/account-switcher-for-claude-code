@@ -49,8 +49,8 @@ test('setup: three logged-in accounts with live quota', async () => {
   ext.activate(context);
   await ext._internals.startupDone();
   // The Default account is not logged in here.
-  await context.globalState.update('accountIdentity', {
-    ...context.globalState.get('accountIdentity'),
+  await env.load('state').update('accountIdentity', {
+    ...env.stored('accountIdentity'),
     __default__: { email: null, loggedIn: false },
   });
   assert.ok(

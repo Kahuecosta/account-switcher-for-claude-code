@@ -15,6 +15,7 @@ const commands = require('./commands');
 const diagnostics = require('./diagnostics');
 const transfer = require('./transfer');
 const { migrate } = require('./migrations');
+const state = require('./state');
 const { createApi } = require('./api');
 const statusBar = require('./ui/statusBar');
 const { AccountsTree } = require('./ui/tree');
@@ -52,6 +53,12 @@ function activate(context) {
   const officialWasActive = !!vscode.extensions.getExtension(OFFICIAL_EXTENSION_ID)?.isActive;
 
   // First, synchronously: the environment, before the Claude Code extension starts its CLI.
+  try {
+    state.init();
+    state.pullSynced();
+  } catch (e) {
+    rt.log.error(`State: ${e instanceof Error && e.stack ? e.stack : e}`);
+  }
   repo.detectRepos();
   const { account: first, autoApplied } = switching.startupAccount();
   env.applyEnv(first);
@@ -168,6 +175,7 @@ function activate(context) {
       background('limits', limits.checkExpired);
       if (Date.now() - lastFocusRefresh > 60e3) {
         lastFocusRefresh = Date.now();
+        background('sync', () => state.pullSynced() && changed.fire(undefined));
         background('identity', identity.refreshAllIdentities);
         background('quota', quota.refreshAllQuota);
         background('health', health.refresh);
@@ -232,8 +240,8 @@ async function startupPrompts(first, autoApplied, officialWasActive) {
     else vscode.window.showInformationMessage(msg);
   }
   try {
-    if (!accounts.getRecords().length && !rt.ctx.globalState.get(K.IMPORT_PROMPTED)) {
-      await rt.ctx.globalState.update(K.IMPORT_PROMPTED, true);
+    if (!accounts.getRecords().length && !state.get(K.IMPORT_PROMPTED)) {
+      await state.update(K.IMPORT_PROMPTED, true);
       await commands.cmdImport({ prompt: true });
     }
     await health.notify();

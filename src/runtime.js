@@ -75,8 +75,8 @@ const backupsDir = () => path.join(accountsRoot(), '.backups');
 const bridgeDir = () => path.join(accountsRoot(), '.bridge');
 const storageDir = (/** @type {string[]} */ ...p) => path.join(rt.ctx.globalStorageUri.fsPath, ...p);
 
-// Where the selection is remembered: per workspace (each window/repo) or globally.
-const store = () => (cfg('scope') === 'user' ? rt.ctx.globalState : rt.ctx.workspaceState);
+// Where the selection is remembered: per workspace (each window/repo) or for every window.
+const store = () => require('./state').selection();
 
 /** @param {any} e */
 function errorMessage(e) {

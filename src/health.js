@@ -4,6 +4,7 @@
 const vscode = require('vscode');
 const { rt, K, t, OFFICIAL_EXTENSION_ID, notifyChanged } = require('./runtime');
 const accounts = require('./accounts');
+const state = require('./state');
 const { maybeReload } = require('./switching');
 
 /** @typedef {{ id: string, message: string, actions: { title: string, run: () => any }[] }} Issue */
@@ -29,10 +30,10 @@ function overridingSetting() {
 }
 
 /** @param {string} id */
-const dismissed = (id) => !!rt.ctx.globalState.get(K.NOTICES, {})[id];
+const dismissed = (id) => !!state.get(K.NOTICES, {})[id];
 /** @param {string} id */
 async function dismiss(id) {
-  await rt.ctx.globalState.update(K.NOTICES, { ...rt.ctx.globalState.get(K.NOTICES, {}), [id]: true });
+  await state.update(K.NOTICES, { ...state.get(K.NOTICES, {}), [id]: true });
   await refresh();
 }
 

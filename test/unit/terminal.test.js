@@ -76,7 +76,7 @@ test('API-key accounts get the key from secret storage', async () => {
     { id: 'ci', dir: path.join(home, '.claude-accounts', 'ci'), mode: 'isolated', kind: 'apiKey' },
   ]);
   await accounts.setEnvVar('ci', 'ANTHROPIC_API_KEY', 'sk-ant-123', true);
-  assert.ok(!JSON.stringify(context.globalState.data).includes('sk-ant-123'));
+  assert.ok(!env.plainStorage().includes('sk-ant-123'));
   await commands.get('claudeAccounts.openTerminal')('ci');
   assert.strictEqual(terminals.at(-1).options.env.ANTHROPIC_API_KEY, 'sk-ant-123');
   // "Log in" for a key-based account edits its variables instead of opening a login terminal.

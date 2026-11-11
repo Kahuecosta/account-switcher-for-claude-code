@@ -39,8 +39,8 @@ test('adding a shared account links to the base profile, never credentials, and 
   );
   assert.ok(!fs.existsSync(path.join(dir, '.credentials.json')), 'credentials are never linked, even when listed');
   assert.deepStrictEqual(JSON.parse(read(path.join(dir, '.claude.json'))).mcpServers, { gh: { command: 'gh' } });
-  assert.deepStrictEqual(context.globalState.get('accounts'), [{ id: 'work', dir, mode: 'shared' }]);
-  assert.strictEqual(context.globalState.get('accountMeta').work.color, 'orange', 'first free color');
+  assert.deepStrictEqual(env.stored('accounts'), [{ id: 'work', dir, mode: 'shared' }]);
+  assert.strictEqual(env.synced('accountMeta').work.color, 'orange', 'first free color');
   const health = env.load('health');
   await health.refresh();
   assert.ok(
@@ -67,7 +67,7 @@ test('a leftover folder with another login is only reused when the user says so'
     'the existing login is shown'
   );
   assert.ok(
-    context.globalState.get('accounts').some((a) => a.id === 'personal-2'),
+    env.stored('accounts').some((a) => a.id === 'personal-2'),
     'a new folder was created instead'
   );
   assert.strictEqual(read(path.join(left, '.claude.json')).includes('old@x.com'), true, 'the old folder is untouched');
@@ -101,15 +101,15 @@ test('removing an account removes its rules and moves the folder to the trash, n
     { pattern: '~/w/**', account: 'Work' },
     { pattern: '~/p/**', account: 'personal-2' },
   ];
-  await context.globalState.update('repoDefaults', { 'remote:x/y': { id: 'work' }, 'remote:x/z': 'personal-2' });
+  await env.load('repo').saveRepoDefaults({ 'remote:x/y': { id: 'work' }, 'remote:x/z': 'personal-2' });
   env.respond = (type, text, items) => (/Remove account/.test(text) ? items[1] : undefined); // "move folder to trash"
   await commands.get('claudeAccounts.remove')('work');
   assert.ok(!fs.existsSync(work));
   assert.strictEqual(read(path.join(base, 'settings.json')), '{"base":true}');
   assert.strictEqual(read(path.join(base, 'agents', 'a.md')), 'agent');
   assert.deepStrictEqual(settings.claudeAccounts.rules, [{ pattern: '~/p/**', account: 'personal-2' }]);
-  assert.deepStrictEqual(context.globalState.get('repoDefaults'), { 'remote:x/z': 'personal-2' });
-  assert.ok(!context.globalState.get('accountMeta').work);
+  assert.deepStrictEqual(env.synced('repoDefaults'), { 'remote:x/z': { id: 'personal-2' } });
+  assert.ok(!env.synced('accountMeta').work);
   assert.ok(messages.some((m) => /Its folder is in the trash/.test(m.text)));
 });
 
@@ -119,7 +119,7 @@ test('without a trash the folder is only deleted after an explicit confirmation'
   env.respond = (type, text, items) => (/Remove account/.test(text) ? items[1] : undefined); // declines permanent deletion
   await commands.get('claudeAccounts.remove')('personal-2');
   assert.ok(fs.existsSync(p2), 'kept, because permanent deletion was not confirmed');
-  assert.ok(!context.globalState.get('accounts').some((a) => a.id === 'personal-2'));
+  assert.ok(!env.stored('accounts').some((a) => a.id === 'personal-2'));
 });
 
 test('folders that must never be deleted', () => {

@@ -421,12 +421,12 @@ async function cmdAppearance(arg) {
     await fs.promises.mkdir(storageDir('avatars'), { recursive: true });
     await fs.promises.copyFile(src, storageDir('avatars', fileName));
     if (a.avatar) await fs.promises.rm(storageDir('avatars', a.avatar), { force: true });
-    await rt.ctx.globalState.update(K.AVATARS, { ...accounts.getAvatars(), [a.id]: fileName });
+    await accounts.saveAvatars({ ...accounts.getAvatars(), [a.id]: fileName });
   } else if (choice.id === 'noimage' && a.avatar) {
     await fs.promises.rm(storageDir('avatars', a.avatar), { force: true });
     const m = { ...accounts.getAvatars() };
     delete m[a.id];
-    await rt.ctx.globalState.update(K.AVATARS, m);
+    await accounts.saveAvatars(m);
   }
   notifyChanged();
 }
@@ -536,13 +536,11 @@ async function cmdRemove(arg) {
     }
   }
   await accounts.removeAllEnv(a.id);
-  const meta = { ...accounts.getMeta() };
-  delete meta[a.id];
-  await rt.ctx.globalState.update(K.META, meta);
+  await accounts.removeMeta(a.id);
   if (a.avatar) await fs.promises.rm(storageDir('avatars', a.avatar), { force: true });
   const avatars = { ...accounts.getAvatars() };
   delete avatars[a.id];
-  await rt.ctx.globalState.update(K.AVATARS, avatars);
+  await accounts.saveAvatars(avatars);
   await accounts.setIdentity(a.id, null);
   await accounts.setLimit(a.id, null);
   await profile.setMirrored(a.id, null);
