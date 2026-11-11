@@ -137,7 +137,9 @@ test('limits expire and the focused window announces it', async () => {
 
 test('turning live quota off restores every status line', async () => {
   await env.vscode.workspace.getConfiguration('claudeAccounts').update('liveQuota', false, 1);
-  await tick(50);
-  assert.ok(!fs.readFileSync(path.join(dir('a'), 'settings.json'), 'utf8').includes('claude-accounts-statusline'));
+  // The bridge is removed in the background: wait for it instead of a fixed delay (slow CI machines).
+  const bridged = () => fs.readFileSync(path.join(dir('a'), 'settings.json'), 'utf8').includes('claude-accounts-statusline');
+  for (let i = 0; i < 100 && bridged(); i++) await tick(50);
+  assert.ok(!bridged());
   assert.ok(!fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8').includes('statusLine'));
 });
