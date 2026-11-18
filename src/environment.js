@@ -1,6 +1,8 @@
 'use strict';
 // Applies an account to this window: the extension host environment (read by the Claude Code
 // extension when it starts its CLI) and the environment of integrated terminals.
+const fs = require('fs');
+const path = require('path');
 const vscode = require('vscode');
 const { rt, t, cfg, DEFAULT_ID, notifyChanged } = require('./runtime');
 const { envOf, BLOCKED_ENV } = require('./accounts');
@@ -139,9 +141,52 @@ function verifyStart(folders = workspaceFolders()) {
   if (inAccount === inLaunch) return false; // no session yet, or both: keep the safe assumption
   state.uncertain = null;
   if (inAccount) state.startedWithId = u.id;
+  stopWatching();
   rt.log?.info(`Claude Code panel verified: started with ${state.startedWithId}`);
   notifyChanged();
   return true;
+}
+
+let stopWatching = () => {};
+
+// While the start is uncertain, watches both sessions folders so it is settled as soon as the panel's
+// CLI registers (instead of waiting for the next timed check). A missing folder is skipped: the timed
+// checks and the check before each switch still cover it.
+function watchStart() {
+  stopWatching();
+  const u = state.uncertain;
+  if (!u) return { dispose() {} };
+  /** @type {fs.FSWatcher[]} */
+  const watchers = [];
+  /** @type {NodeJS.Timeout | undefined} */
+  let debounce;
+  const stop = () => {
+    clearTimeout(debounce);
+    for (const w of watchers.splice(0)) w.close();
+  };
+  const onChange = () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      try {
+        verifyStart();
+      } catch (e) {
+        rt.log?.warn(`start check: ${e}`);
+      }
+    }, 300);
+    debounce.unref?.();
+  };
+  for (const dir of new Set([u.dir, u.launchDir])) {
+    try {
+      const w = fs.watch(path.join(dir, 'sessions'), onChange);
+      w.on('error', () => w.close());
+      w.unref?.();
+      watchers.push(w);
+    } catch {
+      /* folder missing */
+    }
+  }
+  stopWatching = stop;
+  return { dispose: stop };
 }
 
 module.exports = {
@@ -153,5 +198,6 @@ module.exports = {
   reloadPending,
   markStartUncertain,
   verifyStart,
+  watchStart,
   touchedEnv,
 };
