@@ -2,6 +2,41 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). New entries are written by [release-please](https://github.com/googleapis/release-please) from Conventional Commits.
 
+## [1.3.0](https://github.com/Kahuecosta/account-switcher-for-claude-code/compare/v1.2.0...v1.3.0) (2026-11-18)
+
+
+### Features
+
+* 5-hour, weekly and per-model usage of every account, read from what Claude Code saves, with no setup; live quota becomes an optional extra ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* a Claude Code panel restored before the extension started follows the account without a reload ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* a short request for a rating, at most twice, after a week of use ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* Claude Accounts view in the Activity Bar, with a card per account showing its plan, 5-hour and weekly usage and actions ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* continue a conversation in another account in a new tab, without reloading, from the usage-limit notification or the Claude Accounts view ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* Diagnose shows whether switching works without a reload, the claude CLI in use, and the source and age of usage figures ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* experimental per-chat accounts: open a new chat as any account without switching the window (macOS, Linux, WSL) ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* logging in works without claude on the PATH, using the CLI bundled with the Claude Code extension, and the login is noticed as soon as it is done ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* switch accounts without reloading the window ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* the usage-limit notification also offers to just switch, and automatic mode carries the conversation at the limit and only switches near it ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+
+
+### Bug fixes
+
+* an old usage reading never triggers the usage threshold ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* changes another window makes to the extension's state are always noticed ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* quick successive switches always end with the selection, the environment and the Claude Code panel on the account chosen last ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* settle the start as soon as the panel registers by watching the sessions folders ([88991bb](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88991bb2375bb697d234552091215de9fe65bd8f)), closes [#10](https://github.com/Kahuecosta/account-switcher-for-claude-code/issues/10)
+* the Claude Code CLI bundled in newer versions of the extension is found ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* the plan (Pro, Max) shows on macOS, where the login is kept in the Keychain ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* the status bar shows the usage window closest to its limit ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+* verify which account a restored Claude Code panel uses instead of assuming Default ([d6ce99a](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/d6ce99aa7b82d5e7778b9c58e99958ceafc86387)), closes [#10](https://github.com/Kahuecosta/account-switcher-for-claude-code/issues/10)
+* with scope "user", other windows follow a switch made elsewhere without a reload ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+
+
+### Documentation
+
+* explain per-account chat history and reloading in Troubleshooting ([85a92c0](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/85a92c0122e8ae025b17e46b363e105aadf01fb1))
+* README, walkthrough, screenshots and demo updated for switching without a reload, the Claude Accounts view and continuing conversations ([88e1e45](https://github.com/Kahuecosta/account-switcher-for-claude-code/commit/88e1e45a3641deac7a9c63ed13dcc662e59d74a6))
+
 ## [1.2.0](https://github.com/Kahuecosta/account-switcher-for-claude-code/compare/v1.1.0...v1.2.0) (2026-11-11)
 
 
