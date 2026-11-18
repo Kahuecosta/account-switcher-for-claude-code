@@ -7,6 +7,7 @@ const vscode = require('vscode');
 const { rt, t, cfg, DEFAULT_ID, notifyChanged } = require('./runtime');
 const { envOf, BLOCKED_ENV } = require('./accounts');
 const { panelSessions } = require('../lib/sessions');
+const { withClaudeOnPath } = require('./cli');
 
 /** @typedef {import('./accounts').Account} Account */
 
@@ -14,11 +15,15 @@ const touchedEnv = new Map(); // variable -> value before this extension changed
 const state = {
   /** Account whose environment the extension host has now. */
   envAccountId: /** @type {string | null} */ (null),
-  /** Account applied when this window activated: what an already running Claude Code panel uses. */
-  startedWithId: /** @type {string | null} */ (null),
+  /**
+   * Account the Claude Code panel uses for its account display and its new chats: the one applied when
+   * this window activated, or the last one it was told about without a reload (src/live.js).
+   */
+  panelAccountId: /** @type {string | null} */ (null),
   /**
    * Set when the Claude Code extension was already active at activation: its panel may have started
-   * the CLI before or after applyEnv(). Cleared by verifyStart() once the panel's session shows which.
+   * the CLI before or after applyEnv(). Cleared by verifyStart() once the panel's session shows which,
+   * or by panelFollows() once the panel has been told about the account.
    */
   uncertain: /** @type {{ id: string, dir: string, launchDir: string } | null} */ (null),
 };
@@ -44,11 +49,17 @@ function desiredEnv(account) {
   return env;
 }
 
+// Names (never values) of the variables the window's account sets, read by the per-chat launcher
+// (lib/wrapper.js) so a chat routed to another account does not inherit them.
+const { VARS_VAR, WINDOW_VAR, BASE_VAR } = require('../lib/wrapper');
+
 /** @param {Account} account */
 function applyEnv(account) {
   const env = desiredEnv(account);
-  for (const name of touchedEnv.keys()) if (!(name in env)) setProcessEnv(name, undefined);
+  for (const name of touchedEnv.keys()) if (!(name in env) && name !== VARS_VAR) setProcessEnv(name, undefined);
   for (const [name, value] of Object.entries(env)) setProcessEnv(name, value);
+  const names = Object.keys(env).filter((n) => n !== 'CLAUDE_CONFIG_DIR');
+  setProcessEnv(VARS_VAR, names.length ? names.join(',') : undefined);
 
   const coll = rt.ctx.environmentVariableCollection;
   coll.persistent = false;
@@ -59,7 +70,7 @@ function applyEnv(account) {
     if (!account.dir && rt.ORIGINAL_ENV) coll.replace('CLAUDE_CONFIG_DIR', rt.ORIGINAL_ENV);
     coll.description = t('Claude Code account: {0}', account.name);
   }
-  if (state.startedWithId === null) state.startedWithId = account.id;
+  if (state.panelAccountId === null) state.panelAccountId = account.id;
   if (state.envAccountId !== account.id) rt.log?.info(`Environment applied: ${account.id}`);
   state.envAccountId = account.id;
   notifyChanged();
@@ -81,6 +92,8 @@ function terminalEnvFor(account) {
   /** @type {Record<string, string>} */
   const env = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !HOST_ONLY.some((re) => re.test(k))) env[k] = v;
+  // The per-chat launcher's view of this window, meaningless anywhere else.
+  for (const k of [WINDOW_VAR, VARS_VAR, BASE_VAR]) delete env[k];
   for (const [name, orig] of touchedEnv) {
     if (orig === undefined) delete env[name];
     else env[name] = orig;
@@ -102,7 +115,7 @@ function createAccountTerminal(account, { name, command, cwd, transient = false,
   const term = vscode.window.createTerminal({
     name,
     cwd,
-    env: terminalEnvFor(account),
+    env: withClaudeOnPath(terminalEnvFor(account)),
     strictEnv: true,
     isTransient: transient,
     iconPath: new vscode.ThemeIcon(icon),
@@ -117,14 +130,14 @@ function createAccountTerminal(account, { name, command, cwd, transient = false,
 // True when the Claude Code panel may still be using another account until the window reloads.
 // While the start is uncertain (see markStartUncertain) any selection may need one.
 /** @param {string} selectedId */
-const reloadPending = (selectedId) => state.startedWithId !== null && (state.uncertain !== null || state.startedWithId !== selectedId);
+const reloadPending = (selectedId) => state.panelAccountId !== null && (state.uncertain !== null || state.panelAccountId !== selectedId);
 
 // The Claude Code extension was already active when this window activated (its panel was restored).
 // Being active does not mean its CLI had started: until verifyStart() settles it, assume the panel
 // kept the launch environment, which is the safe side (a reload is offered rather than skipped).
 /** @param {Account} account @param {string} launchDir */
 function markStartUncertain(account, launchDir) {
-  state.startedWithId = DEFAULT_ID;
+  state.panelAccountId = DEFAULT_ID;
   state.uncertain = account.dir ? { id: account.id, dir: account.dir, launchDir } : null;
 }
 
@@ -140,14 +153,23 @@ function verifyStart(folders = workspaceFolders()) {
   const inLaunch = panelSessions(u.launchDir, { folders, since }).length > 0;
   if (inAccount === inLaunch) return false; // no session yet, or both: keep the safe assumption
   state.uncertain = null;
-  if (inAccount) state.startedWithId = u.id;
+  if (inAccount) state.panelAccountId = u.id;
   stopWatching();
-  rt.log?.info(`Claude Code panel verified: started with ${state.startedWithId}`);
+  rt.log?.info(`Claude Code panel verified: started with ${state.panelAccountId}`);
   notifyChanged();
   return true;
 }
 
 let stopWatching = () => {};
+
+// The Claude Code panel now uses `id` for its account display and new chats (it was told without a
+// reload, or had not started yet): nothing is uncertain any more.
+/** @param {string} id */
+function panelFollows(id) {
+  state.panelAccountId = id;
+  state.uncertain = null;
+  stopWatching();
+}
 
 // While the start is uncertain, watches both sessions folders so it is settled as soon as the panel's
 // CLI registers (instead of waiting for the next timed check). A missing folder is skipped: the timed
@@ -199,5 +221,6 @@ module.exports = {
   markStartUncertain,
   verifyStart,
   watchStart,
+  panelFollows,
   touchedEnv,
 };

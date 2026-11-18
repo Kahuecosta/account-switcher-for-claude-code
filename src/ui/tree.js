@@ -6,6 +6,7 @@ const accounts = require('../accounts');
 const repo = require('../repo');
 const identity = require('../identity');
 const env = require('../environment');
+const perChat = require('../perChat');
 const f = require('./format');
 
 /** @typedef {import('../accounts').Account} Account */
@@ -45,6 +46,7 @@ class AccountsTree {
     if (a.id === DEFAULT_ID) flags.push('default');
     else flags.push(a.mode);
     if (a.kind === 'subscription') flags.push('login');
+    if (perChat.eligible(a)) flags.push('perchat');
     item.contextValue = flags.join('.');
 
     const tip = new vscode.MarkdownString('', true);

@@ -49,7 +49,8 @@ function update() {
         ? `${f.iconText(cur)} ${initials(name)}`
         : `${f.iconText(cur)} Claude: ${name}`;
   if (cfg('showPlan') && id?.plan && style !== 'icon') text += ` · ${id.plan}`;
-  const shown = q && (q.fiveHour || q.sevenDay);
+  // The window closest to its limit: a full week matters even when the 5-hour window is empty.
+  const shown = q ? [q.fiveHour, q.sevenDay].filter(Boolean).sort((x, y) => y.usedPct - x.usedPct)[0] : null;
   if (shown) text += ` · ${Math.round(shown.usedPct)}%`;
   if (limit) text += limit.estimated ? ' $(watch)' : ` $(watch) ${f.clock(limit.until)}`;
   if (pending) text = `$(sync) ${text}`;
@@ -103,7 +104,7 @@ function update() {
   const u = usage.usageOf(cur.id);
   if (u) line(f.md(t('Tokens today ({0}): {1}', cfg('shareHistory') ? t('all accounts') : cur.name, formatTokens(totalTokens(u.today)))));
   if (pending) {
-    const started = accounts.findAccount(env.state.startedWithId);
+    const started = accounts.findAccount(env.state.panelAccountId);
     tip.appendMarkdown('\n---\n');
     line(
       `$(sync) ${f.md(t('The Claude Code panel still uses "{0}" until the window reloads.', started ? started.name : '?'))} [${f.md(t('Reload window'))}](command:workbench.action.reloadWindow)`

@@ -63,6 +63,7 @@ function setup(config = {}, opts = {}) {
   const terminals = [];
   const watchers = [];
   const commands = new Map();
+  const webviews = new Map();
   const calls = { reload: 0, executed: [] };
   const extensions = {};
   const configChanged = new EventEmitter();
@@ -242,6 +243,10 @@ function setup(config = {}, opts = {}) {
       },
       createOutputChannel: () => ({ info() {}, warn() {}, error() {}, debug() {}, trace() {}, show() {}, dispose() {} }),
       createTreeView: () => ({ dispose() {} }),
+      registerWebviewViewProvider: (id, provider) => {
+        webviews.set(id, provider);
+        return { dispose() {} };
+      },
       registerUriHandler: () => ({ dispose() {} }),
       onDidCloseTerminal: () => ({ dispose() {} }),
       onDidChangeWindowState: () => ({ dispose() {} }),
@@ -337,6 +342,7 @@ function setup(config = {}, opts = {}) {
     watchers,
     terminals,
     commands,
+    webviews,
     extensions,
     vscode,
     context,

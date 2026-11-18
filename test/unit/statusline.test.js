@@ -26,6 +26,7 @@ test('snapshot parsing: windows, expiry, formats', () => {
     sevenDay: { usedPct: 41, resetsAt: now + 86400e3 },
     at: 1,
     version: '2.1.312',
+    source: 'statusline',
   });
   assert.strictEqual(sl.peakUsage(q), 41);
   const expired = sl.parseSnapshot(

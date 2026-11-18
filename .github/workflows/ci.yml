@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Weekly, so a Claude Code release that changes what switching without a reload relies on is noticed
+  # even when nothing here changed (job "With the Claude Code extension").
+  schedule:
+    - cron: '17 6 * * 1'
 
 permissions:
   contents: read
@@ -81,6 +85,22 @@ jobs:
       - name: Integration tests
         if: runner.os != 'Linux'
         run: npm run test:integration
+
+  claude-code:
+    # Against the real Claude Code extension from the Marketplace: fails when a Claude Code release changes
+    # what switching without a reload relies on.
+    name: With the Claude Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: xvfb-run -a npm run test:claude-code
 
   package:
     name: Package

@@ -41,7 +41,7 @@ test('a synced default with another e-mail is not applied to the wrong login', a
   ext.activate(context);
   assert.strictEqual(process.env.CLAUDE_CONFIG_DIR, other, 'applied synchronously, matched by e-mail');
   const environment = env.load('environment');
-  assert.strictEqual(environment.state.startedWithId, '__default__', 'the running panel still uses the launch environment');
+  assert.strictEqual(environment.state.panelAccountId, '__default__', 'the running panel still uses the launch environment');
   assert.ok(environment.reloadPending('other'));
   env.respond = () => undefined;
   await ext._internals.promptsDone();
@@ -62,7 +62,7 @@ test('an uncertain start is settled by the session the restored panel registered
   const session = { pid: process.pid, cwd: repoDir, startedAt: Date.now(), entrypoint: 'claude-vscode' };
   write(path.join(other, 'sessions', `${process.pid}.json`), JSON.stringify(session));
   assert.strictEqual(environment.verifyStart([repoDir]), true);
-  assert.strictEqual(environment.state.startedWithId, 'other');
+  assert.strictEqual(environment.state.panelAccountId, 'other');
   assert.strictEqual(environment.state.uncertain, null);
   assert.ok(!environment.reloadPending('other'), 'no false "reload pending" for the account in use');
   assert.ok(environment.reloadPending('__default__'), 'switching back to Default reloads');
@@ -75,7 +75,7 @@ test('a session in the launch folder confirms the panel kept the launch environm
   const session = { pid: process.pid, cwd: repoDir, startedAt: Date.now(), entrypoint: 'claude-vscode' };
   write(path.join(home, '.claude', 'sessions', `${process.pid}.json`), JSON.stringify(session));
   assert.strictEqual(environment.verifyStart([repoDir]), true);
-  assert.strictEqual(environment.state.startedWithId, '__default__');
+  assert.strictEqual(environment.state.panelAccountId, '__default__');
   assert.ok(environment.reloadPending('other'), 'the reload is still offered');
   fs.rmSync(path.join(home, '.claude', 'sessions'), { recursive: true, force: true });
 });
@@ -90,7 +90,7 @@ test('the sessions folders are watched, so the start is settled as soon as the p
     write(path.join(other, 'sessions', `${process.pid}.json`), JSON.stringify(session));
     for (let i = 0; i < 50 && environment.state.uncertain; i++) await new Promise((r) => setTimeout(r, 100));
     assert.strictEqual(environment.state.uncertain, null, 'settled by the watcher, without a timed check');
-    assert.strictEqual(environment.state.startedWithId, 'other');
+    assert.strictEqual(environment.state.panelAccountId, 'other');
   } finally {
     watcher.dispose();
     fs.rmSync(path.join(other, 'sessions'), { recursive: true, force: true });

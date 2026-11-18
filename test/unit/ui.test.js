@@ -62,8 +62,8 @@ test('tree items: context values drive the menus', () => {
   const accounts = env.load('accounts');
   const tree = new AccountsTree();
   const items = Object.fromEntries(tree.getChildren().map((a) => [a.id, tree.getTreeItem(a)]));
-  assert.strictEqual(items.__default__.contextValue, 'account.other.default.login');
-  assert.strictEqual(items.work.contextValue, 'account.other.shared.login');
+  assert.strictEqual(items.__default__.contextValue, 'account.other.default.login.perchat');
+  assert.strictEqual(items.work.contextValue, 'account.other.shared.login.perchat');
   assert.strictEqual(items.side.contextValue, 'account.current.isolated');
   assert.match(items.side.description, /current · Amazon Bedrock/);
   assert.strictEqual(accounts.isSignedIn(accounts.findAccount('side')), true);
@@ -75,6 +75,14 @@ test('tree items: context values drive the menus', () => {
     'the Default account cannot be removed'
   );
   assert.ok(when('claudeAccounts.remove').every((re) => re.test(items.work.contextValue)));
+  assert.ok(
+    when('claudeAccounts.newChatAs').every((re) => re.test(items.work.contextValue)),
+    'a claude.ai login can be used per chat'
+  );
+  assert.ok(
+    when('claudeAccounts.newChatAs').every((re) => !re.test(items.side.contextValue)),
+    'a Bedrock account cannot: the launcher cannot supply its credentials'
+  );
   assert.ok(
     when('claudeAccounts.switch').every((re) => !re.test(items.side.contextValue)),
     'no switch on the current account'

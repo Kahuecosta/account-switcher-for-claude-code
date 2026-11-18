@@ -39,7 +39,6 @@ async function main() {
         'update.mode': 'none',
         'extensions.ignoreRecommendations': true,
         'security.workspace.trust.enabled': false,
-        'claudeAccounts.liveQuota': true,
         'claudeAccounts.reloadBehavior': 'ask',
       },
       null,
