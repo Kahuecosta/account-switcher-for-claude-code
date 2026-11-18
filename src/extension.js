@@ -1,6 +1,6 @@
 'use strict';
 const vscode = require('vscode');
-const { rt, K, t, cfg, DEFAULT_ID, EXTENSION_NAME, OFFICIAL_EXTENSION_ID, changed, store, reportError } = require('./runtime');
+const { rt, K, t, cfg, DEFAULT_ID, EXTENSION_NAME, OFFICIAL_EXTENSION_ID, changed, store, reportError, baseDir } = require('./runtime');
 const accounts = require('./accounts');
 const env = require('./environment');
 const repo = require('./repo');
@@ -62,7 +62,13 @@ function activate(context) {
   repo.detectRepos();
   const { account: first, autoApplied } = switching.startupAccount();
   env.applyEnv(first);
-  if (officialWasActive && first.id !== DEFAULT_ID) env.state.startedWithId = DEFAULT_ID;
+  if (officialWasActive && first.id !== DEFAULT_ID) {
+    env.markStartUncertain(first, baseDir());
+    // The restored panel starts its CLI shortly: check a few times which account it got.
+    const timers = [2000, 8000, 30000].map((ms) => setTimeout(() => background('start check', () => env.verifyStart()), ms));
+    for (const tm of timers) tm.unref?.();
+    context.subscriptions.push({ dispose: () => timers.forEach(clearTimeout) });
+  }
   rt.log.info(
     `Activated: ${first.id}${autoApplied ? ` (${repo.reasonOf(autoApplied)})` : ''}; Claude Code active before: ${officialWasActive}`
   );

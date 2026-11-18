@@ -55,6 +55,7 @@ async function selectAccount(account, reason, { reload = true, silent = false } 
   notifyChanged();
   if (silent) return;
   const msg = reason ? t('Claude Code account: {0} ({1}).', account.name, reason) : t('Claude Code account: {0}.', account.name);
+  env.verifyStart(); // settle an uncertain start first, so the reload decision uses the real account
   if (!env.reloadPending(account.id)) {
     vscode.window.showInformationMessage(msg);
     return;
