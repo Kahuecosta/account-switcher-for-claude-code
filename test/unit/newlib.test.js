@@ -175,10 +175,12 @@ test(
     // Resume: the newest copy wins; the base profile (~/.claude) is used without the variable.
     write(path.join(base, 'projects', 'p', `${ID}.jsonl`), 'x');
     write(path.join(accW, 'projects', 'p', `${ID}.jsonl`), 'x');
-    const past = new Date(Date.now() - 120e3);
-    fs.utimesSync(path.join(base, 'projects', 'p', `${ID}.jsonl`), past, past);
+    // Times a minute apart: some shells (bash 3.2, /bin/sh on macOS) compare them in whole seconds.
+    const at = (/** @type {number} */ ago) => new Date(Date.now() - ago * 1000);
+    fs.utimesSync(path.join(base, 'projects', 'p', `${ID}.jsonl`), at(240), at(240));
+    fs.utimesSync(path.join(accW, 'projects', 'p', `${ID}.jsonl`), at(120), at(120));
     assert.strictEqual(run({ CLAUDE_CONFIG_DIR: accX }, [`--resume=${ID}`]), `${accW}|--resume=${ID}`, 'newest copy wins');
-    fs.utimesSync(path.join(base, 'projects', 'p', `${ID}.jsonl`), new Date(), new Date());
+    fs.utimesSync(path.join(base, 'projects', 'p', `${ID}.jsonl`), at(60), at(60));
     assert.strictEqual(run({ CLAUDE_CONFIG_DIR: accX }, ['--resume', ID]), `unset|--resume ${ID}`, 'the base profile unsets the variable');
     // A window started with CLAUDE_CONFIG_DIR has its own base profile.
     const otherBase = path.join(root, 'main');
