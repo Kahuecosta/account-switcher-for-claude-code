@@ -64,8 +64,10 @@ function activate(context) {
   env.applyEnv(first);
   if (officialWasActive && first.id !== DEFAULT_ID) {
     env.markStartUncertain(first, baseDir());
-    // The restored panel starts its CLI shortly: check a few times which account it got.
-    const timers = [2000, 8000, 30000].map((ms) => setTimeout(() => background('start check', () => env.verifyStart()), ms));
+    // The restored panel starts its CLI shortly: settle as soon as it registers (watcher), with timed
+    // checks as a fallback for folders that cannot be watched.
+    context.subscriptions.push(env.watchStart());
+    const timers = [2000, 8000, 30000, 120000].map((ms) => setTimeout(() => background('start check', () => env.verifyStart()), ms));
     for (const tm of timers) tm.unref?.();
     context.subscriptions.push({ dispose: () => timers.forEach(clearTimeout) });
   }

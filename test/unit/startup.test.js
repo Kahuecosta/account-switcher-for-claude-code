@@ -80,6 +80,23 @@ test('a session in the launch folder confirms the panel kept the launch environm
   fs.rmSync(path.join(home, '.claude', 'sessions'), { recursive: true, force: true });
 });
 
+test('the sessions folders are watched, so the start is settled as soon as the panel registers', async () => {
+  const environment = env.load('environment');
+  fs.mkdirSync(path.join(other, 'sessions'), { recursive: true });
+  environment.markStartUncertain({ id: 'other', dir: other }, path.join(home, '.claude'));
+  const watcher = environment.watchStart(); // the launch folder has no sessions/ yet: skipped
+  try {
+    const session = { pid: process.pid, cwd: repoDir, startedAt: Date.now(), entrypoint: 'claude-vscode' };
+    write(path.join(other, 'sessions', `${process.pid}.json`), JSON.stringify(session));
+    for (let i = 0; i < 50 && environment.state.uncertain; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.strictEqual(environment.state.uncertain, null, 'settled by the watcher, without a timed check');
+    assert.strictEqual(environment.state.startedWithId, 'other');
+  } finally {
+    watcher.dispose();
+    fs.rmSync(path.join(other, 'sessions'), { recursive: true, force: true });
+  }
+});
+
 test('a default whose e-mail matches no login here applies nothing', () => {
   const repo = env.load('repo');
   assert.strictEqual(repo.accountForStored({ id: 'work', email: 'nobody@acme.com' }), null);
