@@ -9,6 +9,8 @@ const t = (/** @type {string} */ message, /** @type {any[]} */ ...args) => vscod
 
 const EXTENSION_NAME = 'Multi-Account Switcher for Claude Code';
 const OFFICIAL_EXTENSION_ID = 'anthropic.claude-code';
+// The Claude Code extension's command that opens a conversation (by session id) or a new chat in a tab.
+const OPEN_SESSION_COMMAND = 'claude-vscode.editor.open';
 const DEFAULT_ID = '__default__';
 const SCHEMA_VERSION = 3;
 
@@ -28,6 +30,9 @@ const K = {
   SELECTED: 'selectedAccount', // workspace or global, see store()
   PREVIOUS: 'previousAccount', // workspace or global
   IMPORT_PROMPTED: 'importPrompted', // global
+  RESUME: 'resumeConversation', // workspace: { id, account, at } to reopen after the reload
+  RATING: 'ratingPrompt', // global: { first, switches, asked, lastAsked, done }
+  WRAPPER_PREV: 'previousProcessWrapper', // global: claudeCode.claudeProcessWrapper before per-chat accounts
 };
 
 const COLORS = ['orange', 'green', 'blue', 'purple', 'pink', 'yellow', 'teal', 'red'];
@@ -75,6 +80,9 @@ const backupsDir = () => path.join(accountsRoot(), '.backups');
 const bridgeDir = () => path.join(accountsRoot(), '.bridge');
 const storageDir = (/** @type {string[]} */ ...p) => path.join(rt.ctx.globalStorageUri.fsPath, ...p);
 
+// The window's folders on this machine's file system, where Claude Code keeps conversations by folder.
+const fileFolders = () => (vscode.workspace.workspaceFolders || []).filter((f) => f.uri.scheme === 'file').map((f) => f.uri.fsPath);
+
 // Where the selection is remembered: per workspace (each window/repo) or for every window.
 const store = () => require('./state').selection();
 
@@ -105,6 +113,7 @@ module.exports = {
   SCHEMA_VERSION,
   EXTENSION_NAME,
   OFFICIAL_EXTENSION_ID,
+  OPEN_SESSION_COMMAND,
   changed,
   notifyChanged,
   cfg,
@@ -116,6 +125,7 @@ module.exports = {
   backupsDir,
   bridgeDir,
   storageDir,
+  fileFolders,
   store,
   errorMessage,
   reportError,

@@ -26,15 +26,24 @@
     "claude",
     "claude code",
     "anthropic",
+    "account switcher",
+    "switch account",
     "multiple accounts",
     "multi-account",
-    "switch account",
-    "account switcher",
+    "accounts",
+    "claude max",
+    "claude pro",
+    "subscription",
+    "login",
     "profile",
     "CLAUDE_CONFIG_DIR",
-    "rate limit",
     "usage limit",
-    "quota"
+    "rate limit",
+    "quota",
+    "5-hour limit",
+    "weekly limit",
+    "cursor",
+    "windsurf"
   ],
   "engines": {
     "vscode": "^1.85.0",
@@ -59,7 +68,8 @@
       "restrictedConfigurations": [
         "claudeAccounts.autoApplyRepoDefault",
         "claudeAccounts.reloadBehavior",
-        "claudeAccounts.onUsageLimit"
+        "claudeAccounts.onUsageLimit",
+        "claudeAccounts.perChatAccounts"
       ]
     },
     "virtualWorkspaces": {
@@ -76,7 +86,8 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run l10n",
     "test": "node --test \"test/unit/**/*.test.js\"",
     "coverage": "c8 node --test \"test/unit/**/*.test.js\"",
-    "test:integration": "vscode-test",
+    "test:integration": "vscode-test --label extension",
+    "test:claude-code": "vscode-test --label claude-code",
     "package": "vsce package --no-dependencies",
     "docs": "node scripts/settings-docs.js",
     "docs:check": "node scripts/settings-docs.js --check",
@@ -120,10 +131,22 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "claudeAccounts.continueInPanel",
+        "title": "%cmd.continueInPanel%",
+        "category": "%category%",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "claudeAccounts.continueInTerminal",
         "title": "%cmd.continueInTerminal%",
         "category": "%category%",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "claudeAccounts.newChatAs",
+        "title": "%cmd.newChatAs%",
+        "category": "%category%",
+        "icon": "$(new-comment)"
       },
       {
         "command": "claudeAccounts.rename",
@@ -274,6 +297,21 @@
       "view/title": [
         {
           "command": "claudeAccounts.add",
+          "when": "view == claudeAccounts.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeAccounts.showUsage",
+          "when": "view == claudeAccounts.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudeAccounts.refresh",
+          "when": "view == claudeAccounts.panel",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudeAccounts.add",
           "when": "view == claudeAccounts.accounts",
           "group": "navigation@1"
         },
@@ -326,6 +364,46 @@
           "command": "claudeAccounts.showLog",
           "when": "view == claudeAccounts.accounts",
           "group": "4_help@2"
+        },
+        {
+          "command": "claudeAccounts.toggleHistorySharing",
+          "when": "view == claudeAccounts.panel",
+          "group": "1_sharing@1"
+        },
+        {
+          "command": "claudeAccounts.toggleLiveQuota",
+          "when": "view == claudeAccounts.panel",
+          "group": "1_sharing@2"
+        },
+        {
+          "command": "claudeAccounts.addRule",
+          "when": "view == claudeAccounts.panel && workspaceFolderCount > 0",
+          "group": "2_repo@1"
+        },
+        {
+          "command": "claudeAccounts.exportSettings",
+          "when": "view == claudeAccounts.panel",
+          "group": "3_transfer@1"
+        },
+        {
+          "command": "claudeAccounts.importSettings",
+          "when": "view == claudeAccounts.panel",
+          "group": "3_transfer@2"
+        },
+        {
+          "command": "claudeAccounts.importExisting",
+          "when": "view == claudeAccounts.panel",
+          "group": "3_transfer@3"
+        },
+        {
+          "command": "claudeAccounts.diagnose",
+          "when": "view == claudeAccounts.panel",
+          "group": "4_help@1"
+        },
+        {
+          "command": "claudeAccounts.showLog",
+          "when": "view == claudeAccounts.panel",
+          "group": "4_help@2"
         }
       ],
       "view/item/context": [
@@ -360,14 +438,24 @@
           "group": "1_use@3"
         },
         {
-          "command": "claudeAccounts.continueInTerminal",
-          "when": "view == claudeAccounts.accounts && viewItem =~ /^account/ && config.claudeAccounts.shareHistory",
+          "command": "claudeAccounts.continueInPanel",
+          "when": "view == claudeAccounts.accounts && viewItem =~ /\\.other\\b/",
           "group": "1_use@4"
+        },
+        {
+          "command": "claudeAccounts.continueInTerminal",
+          "when": "view == claudeAccounts.accounts && viewItem =~ /\\.other\\b/",
+          "group": "1_use@5"
+        },
+        {
+          "command": "claudeAccounts.newChatAs",
+          "when": "view == claudeAccounts.accounts && viewItem =~ /\\.perchat\\b/ && claudeAccounts.perChatSupported",
+          "group": "1_use@6"
         },
         {
           "command": "claudeAccounts.setRepoDefault",
           "when": "view == claudeAccounts.accounts && viewItem =~ /^account/ && workspaceFolderCount > 0",
-          "group": "1_use@5"
+          "group": "1_use@7"
         },
         {
           "command": "claudeAccounts.rename",
@@ -411,7 +499,24 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeAccounts",
+          "title": "%view.container%",
+          "icon": "media/accounts.svg"
+        }
+      ]
+    },
     "views": {
+      "claudeAccounts": [
+        {
+          "type": "webview",
+          "id": "claudeAccounts.panel",
+          "name": "%view.panel%",
+          "contextualTitle": "%displayName%"
+        }
+      ],
       "explorer": [
         {
           "id": "claudeAccounts.accounts",
@@ -516,8 +621,15 @@
           "default": "workspace",
           "description": "%cfg.scope%"
         },
-        "claudeAccounts.reloadBehavior": {
+        "claudeAccounts.switchWithoutReload": {
           "order": 2,
+          "scope": "application",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%cfg.switchWithoutReload%"
+        },
+        "claudeAccounts.reloadBehavior": {
+          "order": 3,
           "type": "string",
           "enum": [
             "ask",
@@ -533,13 +645,13 @@
           "description": "%cfg.reloadBehavior%"
         },
         "claudeAccounts.autoApplyRepoDefault": {
-          "order": 3,
+          "order": 4,
           "type": "boolean",
           "default": true,
           "description": "%cfg.autoApplyRepoDefault%"
         },
         "claudeAccounts.rules": {
-          "order": 4,
+          "order": 5,
           "scope": "application",
           "type": "array",
           "default": [],
@@ -705,6 +817,16 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "%cfg.shareMcpServers%"
+        },
+        "claudeAccounts.perChatAccounts": {
+          "order": 36,
+          "scope": "machine",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%cfg.perChatAccounts%",
+          "tags": [
+            "experimental"
+          ]
         },
         "claudeAccounts.applyToTerminal": {
           "order": 40,

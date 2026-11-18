@@ -30,6 +30,7 @@ To try it without touching your real accounts, start VS Code with a throwaway ho
 | `npm test`                 | Unit tests (`node --test`), with a stub of the `vscode` module                                                                                                                                  |
 | `npm run coverage`         | Unit tests with coverage thresholds                                                                                                                                                             |
 | `npm run test:integration` | Tests inside a real VS Code (`VSCODE_TEST_VERSION=1.85.0` for the minimum version; use `xvfb-run -a` on Linux without a display)                                                                |
+| `npm run test:claude-code` | Tests with the real Claude Code extension, downloaded from the Marketplace: what switching without a reload relies on (Linux and macOS; use `xvfb-run -a` on Linux without a display)           |
 | `npm run format`           | Formats every file with Prettier                                                                                                                                                                |
 | `npm run docs`             | Regenerates the settings tables in the READMEs from `package.json`                                                                                                                              |
 | `npm run package`          | Builds the `.vsix`                                                                                                                                                                              |
@@ -44,7 +45,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is organized. 
 - `lib/` holds logic with no VS Code dependency (links, history merge, rules, git, usage, status line bridge). Test it directly.
 - `src/` holds the VS Code side. Its tests use the stub in `test/unit/helpers.js`; behavior that depends on VS Code itself (terminals, activation order) belongs in `test/integration/`.
 - Plain JavaScript with JSDoc types, checked by `tsc` (`npm run typecheck`). Keep `engines.vscode` and `@types/vscode` in step: do not use APIs newer than the minimum version.
-- Anything that changes files in `~/.claude` or account folders must go through `profile.runOperation()`, which takes the cross-window lock, journals every change and rolls back on failure. Never delete user data: move it to the journal's backup folder instead.
+- Anything that changes files in `~/.claude` or account folders must go through `profile.runOperation()`, which takes the cross-window lock, journals every change and rolls back on failure. Never delete user data: move it to the journal's backup folder instead. The one exception is carrying a conversation to another account (`lib/conversations.js`): it only adds files, or replaces a conversation, atomically, with a copy that continues it, so nothing can be lost.
+- Two `claude` processes must never write the same conversation: when the original may still be running, continue from a fork (`conversations.forkSession()`), never from a same-id copy.
+- Changes to Claude Code's own settings (`claudeCode.*`) keep the user's value: read it right before writing, change only what the extension added, and restore it when the feature is turned off (see `src/live.js` and `src/perChat.js`).
 - Never read, store or log tokens. Read only the non-secret fields documented in the README.
 
 ## Translations

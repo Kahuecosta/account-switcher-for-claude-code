@@ -39,8 +39,21 @@ const keep = (src, name) => fs.copyFileSync(src, path.join(out, 'screenshots', n
 async function seed() {
   const now = Math.floor(Date.now() / 1000);
   const dir = (id) => path.join(home, '.claude-accounts', id);
+  // Usage as Claude Code saves it in each account's .claude.json (read by default, no setup).
+  const usage = (uuid, five, seven, opus) => ({
+    fetchedAtMs: Date.now() - 60e3,
+    accountUuid: uuid,
+    utilization: {
+      five_hour: { utilization: five, resets_at: new Date((now + 2 * 3600 + 17 * 60) * 1000).toISOString() },
+      seven_day: { utilization: seven, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+      seven_day_opus: opus === undefined ? null : { utilization: opus, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+    },
+  });
   // Default account: the original ~/.claude.
-  write(path.join(home, '.claude.json'), { oauthAccount: { emailAddress: 'you@example.com', organizationName: 'Personal' } });
+  write(path.join(home, '.claude.json'), {
+    oauthAccount: { accountUuid: 'default', emailAddress: 'you@example.com', organizationName: 'Personal' },
+    cachedUsageUtilization: usage('default', 23, 12),
+  });
   write(path.join(home, '.claude', '.credentials.json'), { claudeAiOauth: { subscriptionType: 'pro' } });
   write(path.join(home, '.claude', 'settings.json'), {});
   const demo = [
@@ -53,7 +66,7 @@ async function seed() {
       org: 'ACME',
       sub: 'max',
       tier: 'default_claude_max_20x',
-      q: [42, 18],
+      q: [42, 18, 55],
     },
     {
       id: 'side-project',
@@ -81,14 +94,11 @@ async function seed() {
   const accounts = mod('accounts');
   await accounts.saveRecords(demo.map((d) => ({ id: d.id, dir: dir(d.id), mode: d.id === 'client' ? 'isolated' : 'shared' })));
   for (const d of demo) {
-    write(path.join(dir(d.id), '.claude.json'), { oauthAccount: { emailAddress: d.email, organizationName: d.org || undefined } });
-    write(path.join(dir(d.id), '.credentials.json'), { claudeAiOauth: { subscriptionType: d.sub, rateLimitTier: d.tier } });
-    write(path.join(dir(d.id), '.multi-account-statusline.json'), {
-      rate_limits: {
-        five_hour: { used_percentage: d.q[0], resets_at: now + 2 * 3600 + 17 * 60 },
-        seven_day: { used_percentage: d.q[1], resets_at: now + 3 * 86400 },
-      },
+    write(path.join(dir(d.id), '.claude.json'), {
+      oauthAccount: { accountUuid: d.id, emailAddress: d.email, organizationName: d.org || undefined },
+      cachedUsageUtilization: usage(d.id, d.q[0], d.q[1], d.q[2]),
     });
+    write(path.join(dir(d.id), '.credentials.json'), { claudeAiOauth: { subscriptionType: d.sub, rateLimitTier: d.tier } });
     await accounts.updateMeta(d.id, { name: d.name, color: d.color, icon: d.icon });
   }
   await accounts.updateMeta('__default__', { color: 'blue' });
@@ -113,7 +123,7 @@ async function seed() {
   );
   const work = accounts.findAccount('work');
   await mod('switching').selectAccount(work, undefined, { silent: true });
-  mod('environment').state.startedWithId = 'work';
+  mod('environment').state.panelAccountId = 'work';
   mod('runtime').notifyChanged();
 }
 
@@ -147,8 +157,7 @@ async function run() {
   await vscode.commands.executeCommand('notifications.clearAll');
   await seed();
   assertDemoOnly();
-  await vscode.commands.executeCommand('workbench.view.explorer');
-  await vscode.commands.executeCommand('claudeAccounts.accounts.focus');
+  await vscode.commands.executeCommand('claudeAccounts.panel.focus');
   await vscode.commands.executeCommand('notifications.clearAll');
   await sleep(2500);
 
@@ -165,14 +174,15 @@ async function run() {
   frames.push(shot('frame-2'));
   execFileSync('xdotool', ['key', 'Return']);
   await sleep(1500);
-  frames.push(shot('frame-3')); // "Reload the window now?" and the sync icon in the status bar
+  frames.push(shot('frame-3')); // the status bar and the Accounts view follow right away
   await vscode.commands.executeCommand('notifications.clearAll');
 
   // Back to Work for the other shots.
   await mod('switching').selectAccount(mod('accounts').findAccount('work'), undefined, { silent: true });
   await sleep(1000);
 
-  // 2. The Explorer view and the status bar.
+  // 2. The Accounts view (Activity Bar) and the status bar.
+  await sleep(1500); // the view renders the new account's cards
   const view = shot('view');
   keep(view, 'accounts-view.png');
 
@@ -240,9 +250,9 @@ async function run() {
     ...text('DejaVu-Sans-Bold', 52, '#F0F3F6', 80, 282, 'Multi-Account'),
     ...text('DejaVu-Sans-Bold', 52, '#F0F3F6', 80, 346, 'Switcher for'),
     ...text('DejaVu-Sans-Bold', 52, '#E8915B', 80, 410, 'Claude Code'),
-    ...text('DejaVu-Sans', 25, '#9198A1', 80, 478, 'Per-window and per-repository accounts'),
-    ...text('DejaVu-Sans', 25, '#9198A1', 80, 516, 'Plan, usage limits and live quota'),
-    ...text('DejaVu-Sans', 25, '#9198A1', 80, 554, 'One-click switch at the limit'),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 478, 'Switch accounts without reloading'),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 516, "Every account's 5-hour and weekly limits"),
+    ...text('DejaVu-Sans', 25, '#9198A1', 80, 554, 'Continue the conversation at the limit'),
     '(',
     crop,
     '-bordercolor',

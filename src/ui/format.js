@@ -42,12 +42,14 @@ function locale() {
 /** @param {number} ms @param {Intl.DateTimeFormatOptions} opts */
 const formatDate = (ms, opts) => new Date(ms).toLocaleString(locale(), opts);
 
-// "14:30", or "Thu 14:30" (in the UI language's own format) when it is not within the next 20 hours.
+// "14:30", or "Thu 14:30" (in the UI language's own format) when it is more than 20 hours away, before or after.
 /** @param {number} ms */
 const clock = (ms) =>
   formatDate(
     ms,
-    ms - Date.now() > 20 * 3600e3 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
+    Math.abs(ms - Date.now()) > 20 * 3600e3
+      ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
+      : { hour: '2-digit', minute: '2-digit' }
   );
 
 // "5h 42% · 7d 10%" from live quota, or ''.

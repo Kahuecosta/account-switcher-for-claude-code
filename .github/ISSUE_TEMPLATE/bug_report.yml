@@ -19,7 +19,7 @@ body:
       label: Steps to reproduce
       placeholder: |
         1. Add an isolated account "Work"
-        2. Switch to it and reload
+        2. Switch to it from the status bar
         3. Run /status in the Claude Code panel
     validations:
       required: true

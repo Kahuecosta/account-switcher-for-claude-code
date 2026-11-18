@@ -2,7 +2,6 @@
 // "Diagnose": a Markdown report of everything that decides which account Claude Code uses.
 const vscode = require('vscode');
 const fs = require('fs');
-const path = require('path');
 const { execFile } = require('child_process');
 const { rt, t, cfg, OFFICIAL_EXTENSION_ID, baseDir, bridgeDir } = require('./runtime');
 const accounts = require('./accounts');
@@ -14,25 +13,18 @@ const health = require('./health');
 const { maskEmail } = require('../lib/names');
 const { isBridgeCommand } = require('../lib/statusline');
 const { samePath } = require('../lib/paths');
+const cli = require('./cli');
+const perChat = require('./perChat');
+const live = require('./live');
 
 /** @typedef {import('./accounts').Account} Account */
-
-// The claude binary bundled with the official extension, or "claude" from PATH.
-function claudeBinary() {
-  const ext = vscode.extensions.getExtension(OFFICIAL_EXTENSION_ID);
-  if (ext) {
-    const p = path.join(ext.extensionPath, 'resources', 'native-binary', process.platform === 'win32' ? 'claude.exe' : 'claude');
-    if (fs.existsSync(p)) return p;
-  }
-  return 'claude';
-}
 
 // `claude auth status` (JSON; exit code 1 when logged out) with the account's environment.
 /** @param {Account} a @returns {Promise<any>} */
 function authStatus(a) {
   return new Promise((resolve) => {
     execFile(
-      claudeBinary(),
+      cli.claudeExecutable(),
       ['auth', 'status'],
       { env: env.terminalEnvFor(a), timeout: 20e3, windowsHide: true, maxBuffer: 1024 * 1024 },
       (err, stdout) => {
@@ -63,6 +55,11 @@ async function buildReport({ runAuthStatus = true } = {}) {
   add(
     `- Claude Code (${OFFICIAL_EXTENSION_ID}): ${official ? `${official.packageJSON?.version} (${official.isActive ? 'active' : 'not active'})` : 'not installed'}`
   );
+  const bundled = cli.bundledClaude();
+  add(`- claude CLI: ${cli.onPath() ? 'on PATH' : 'not on PATH'} · bundled: ${bundled ? `\`${bundled}\`` : 'none'}`);
+  add(
+    `- Per-chat accounts: ${perChat.enabled() ? (perChat.active() ? 'on' : '⚠️ on, but claudeCode.claudeProcessWrapper is not the launcher') : 'off'}`
+  );
   add();
   add(`## This window`);
   add();
@@ -70,7 +67,16 @@ async function buildReport({ runAuthStatus = true } = {}) {
   add(
     `- Applied to the extension host: \`${env.state.envAccountId}\` · CLAUDE_CONFIG_DIR=\`${process.env.CLAUDE_CONFIG_DIR ?? '(not set)'}\``
   );
-  add(`- Applied when the window started: \`${env.state.startedWithId}\`${env.reloadPending(cur.id) ? ` — reload pending` : ''}`);
+  add(`- Claude Code panel uses: \`${env.state.panelAccountId}\`${env.reloadPending(cur.id) ? ` — reload pending` : ''}`);
+  const liveWhy =
+    cfg('switchWithoutReload') === false
+      ? 'off (claudeAccounts.switchWithoutReload)'
+      : live.overridden()
+        ? '⚠️ not possible: CLAUDE_CONFIG_DIR is set in claudeCode.environmentVariables'
+        : (await live.officialSupports())
+          ? 'yes'
+          : 'not possible: the installed Claude Code extension does not support it';
+  add(`- Switch without reloading: ${liveWhy}`);
   add(`- Launch value of CLAUDE_CONFIG_DIR: \`${rt.ORIGINAL_ENV ?? '(not set)'}\` · base profile: \`${baseDir()}\``);
   add(`- Scope: ${cfg('scope')} · terminals: ${cfg('applyToTerminal') ? 'on' : 'off'} · reload: ${cfg('reloadBehavior')}`);
   const override = health.overridingSetting();
@@ -112,7 +118,8 @@ async function buildReport({ runAuthStatus = true } = {}) {
     add(`- Usage limit: ${lim ? new Date(lim.until).toISOString() + (lim.estimated ? ' (estimated)' : '') : 'none'}`);
     if (q) {
       const parts = [q.fiveHour && `5h ${Math.round(q.fiveHour.usedPct)}%`, q.sevenDay && `7d ${Math.round(q.sevenDay.usedPct)}%`];
-      add(`- Quota: ${parts.filter(Boolean).join(' · ')}`);
+      const age = q.at ? `, ${Math.round((Date.now() - q.at) / 60e3)} min old` : '';
+      add(`- Quota: ${parts.filter(Boolean).join(' · ')} (${q.source}${age})`);
     }
     add();
   }
@@ -122,7 +129,7 @@ async function buildReport({ runAuthStatus = true } = {}) {
   add(`- Shared items mode: ${cfg('sharedItemsMode')} · items: ${(await profile.configItems()).join(', ') || '—'}`);
   add(`- History sharing: ${cfg('shareHistory') ? 'on' : 'off'} · items: ${profile.configuredHistoryItems().join(', ')}`);
   add(`- MCP servers mirrored into shared accounts: ${cfg('shareMcpServers') ? 'on' : 'off'}`);
-  add(`- Live quota: ${quota.enabled() ? 'on' : 'off'}`);
+  add(`- Status line bridge (live quota): ${quota.bridgeEnabled() ? 'on' : 'off'}`);
   for (const file of quota.settingsTargets()) {
     let state = 'no status line';
     try {
@@ -162,4 +169,4 @@ async function cmdDiagnose() {
   }
 }
 
-module.exports = { cmdDiagnose, buildReport, authStatus, claudeBinary };
+module.exports = { cmdDiagnose, buildReport, authStatus };

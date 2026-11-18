@@ -1,42 +1,57 @@
 'use strict';
-// Live quota (opt-in): installs the status line bridge and reads what it saves for each account.
+// Plan usage (5-hour and weekly windows) of every account. The main source is what Claude Code saves in
+// each account's .claude.json, read without changing anything. The opt-in status line bridge
+// (claudeAccounts.liveQuota) adds a fresher reading whenever the claude CLI draws its status line.
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { rt, cfg, baseDir, bridgeDir, notifyChanged } = require('./runtime');
+const { rt, cfg, DEFAULT_ID, baseDir, baseJsonPath, bridgeDir, notifyChanged } = require('./runtime');
 const accounts = require('./accounts');
 const statusline = require('../lib/statusline');
+const { readCachedUsage, mergeQuota } = require('../lib/quota');
 
 /** @typedef {import('./accounts').Account} Account */
+/** @typedef {import('../lib/quota').Quota} Quota */
 
-/** @type {Map<string, any>} */
+/** @type {Map<string, Quota | null>} */
 const snapshots = new Map();
-/** @type {vscode.FileSystemWatcher | undefined} */
-let watcher;
+/** @type {vscode.Disposable[]} */
+let watchers = [];
+/** @type {NodeJS.Timeout | undefined} */
+let pending;
+// Claude Code writes .claude.json often, and it can be several MB: at most one read every few seconds.
+const DEBOUNCE_MS = 5000;
 
-const enabled = () => !!cfg('liveQuota');
-/** @param {string} id */
-const quotaOf = (id) => (enabled() ? snapshots.get(id) || null : null);
+const bridgeEnabled = () => !!cfg('liveQuota');
+/** @param {string} id @returns {Quota | null} */
+const quotaOf = (id) => snapshots.get(id) || null;
+
+// Where Claude Code keeps the account's .claude.json.
+/** @param {Account} a */
+const jsonPathOf = (a) => (a.id === DEFAULT_ID || !a.dir ? baseJsonPath() : path.join(a.dir, '.claude.json'));
 
 /** @param {Account} a */
 async function refreshQuota(a) {
-  const snap = await statusline.readSnapshot(accounts.configDirOf(a));
+  const dir = accounts.configDirOf(a);
+  const [cached, bridged] = await Promise.all([
+    readCachedUsage(jsonPathOf(a)).catch(() => null),
+    bridgeEnabled() ? statusline.readSnapshot(dir) : null,
+  ]);
+  const snap = mergeQuota(cached, bridged);
   const before = JSON.stringify(snapshots.get(a.id) || null);
   snapshots.set(a.id, snap);
   return { snap, changed: before !== JSON.stringify(snap) };
 }
 
 async function refreshAllQuota() {
-  if (!enabled()) {
-    if (snapshots.size) {
-      snapshots.clear();
-      notifyChanged();
-    }
-    return;
-  }
-  const results = await Promise.all(accounts.allAccounts().map((a) => refreshQuota(a).catch(() => ({ changed: false }))));
+  const all = accounts.allAccounts();
+  for (const id of snapshots.keys()) if (!all.some((a) => a.id === id)) snapshots.delete(id);
+  const results = await Promise.all(all.map((a) => refreshQuota(a).catch(() => ({ changed: false }))));
   if (results.some((r) => r.changed)) notifyChanged();
 }
+
+// True when any account has usage figures (the status bar then refreshes relative times every minute).
+const hasAny = () => [...snapshots.values()].some(Boolean);
 
 // settings.json files to wrap: the base profile and every account folder, once per real file
 // (shared-profile accounts link to the base file).
@@ -68,7 +83,7 @@ function settingsTargets() {
 
 // Installs or removes the bridge in every settings file, following the liveQuota setting.
 async function syncBridge() {
-  const on = enabled();
+  const on = bridgeEnabled();
   const errors = [];
   for (const file of settingsTargets()) {
     try {
@@ -86,31 +101,69 @@ async function syncBridge() {
   return errors;
 }
 
+/** @param {string} file */
+function watchFile(file) {
+  if (!fs.existsSync(path.dirname(file))) return undefined;
+  return vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(path.dirname(file)), path.basename(file)));
+}
+
 /**
- * Watches the selected account's snapshot.
+ * Watches the selected account's usage: its .claude.json and, with the bridge on, its snapshot.
  * @param {(a: Account, snap: any) => void} onSnapshot
  */
 function watchSelected(onSnapshot) {
-  watcher?.dispose();
-  watcher = undefined;
-  if (!enabled()) return;
+  dispose();
   const a = accounts.selectedAccount();
-  const dir = accounts.configDirOf(a);
-  if (!fs.existsSync(dir)) return;
-  watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(dir), statusline.SNAPSHOT_FILE));
-  const handler = async () => {
+  const files = [jsonPathOf(a)];
+  if (bridgeEnabled()) files.push(path.join(accounts.configDirOf(a), statusline.SNAPSHOT_FILE));
+  // What the threshold check last saw. Compared with the reading itself rather than with the stored
+  // snapshot, which other refreshes (window focus, the Accounts view) may already have updated.
+  let lastChecked = JSON.stringify(quotaOf(a.id));
+  const read = async () => {
     try {
       const { snap, changed } = await refreshQuota(a);
       if (changed) notifyChanged();
-      if (snap) onSnapshot(a, snap);
+      const seen = JSON.stringify(snap);
+      if (snap && seen !== lastChecked) onSnapshot(a, snap);
+      lastChecked = seen;
     } catch (e) {
       rt.log.warn(`Quota of ${a.id}: ${e}`);
     }
   };
-  watcher.onDidChange(handler);
-  watcher.onDidCreate(handler);
+  // At most one read per DEBOUNCE_MS, starting with the first write: a steady stream of writes never
+  // postpones it.
+  const handler = () => {
+    if (pending) return;
+    pending = setTimeout(() => {
+      pending = undefined;
+      read();
+    }, DEBOUNCE_MS);
+  };
+  for (const file of files) {
+    const w = watchFile(file);
+    if (!w) continue;
+    w.onDidChange(handler);
+    w.onDidCreate(handler);
+    watchers.push(w);
+  }
 }
 
-const dispose = () => watcher?.dispose();
+function dispose() {
+  for (const w of watchers) w.dispose();
+  watchers = [];
+  if (pending) clearTimeout(pending);
+  pending = undefined;
+}
 
-module.exports = { enabled, quotaOf, refreshQuota, refreshAllQuota, syncBridge, settingsTargets, watchSelected, dispose };
+module.exports = {
+  bridgeEnabled,
+  quotaOf,
+  hasAny,
+  jsonPathOf,
+  refreshQuota,
+  refreshAllQuota,
+  syncBridge,
+  settingsTargets,
+  watchSelected,
+  dispose,
+};

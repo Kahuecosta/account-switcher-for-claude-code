@@ -278,7 +278,7 @@ async function cmdAdd() {
     summary = profile.describe(await profile.setUpNewAccount(account));
     if (profile.historyItems().length) summary += ' ' + t('History shared with the other accounts.');
     await profile.mirrorMcp(account);
-    if (quota.enabled()) await quota.syncBridge();
+    if (quota.bridgeEnabled()) await quota.syncBridge();
   } catch (e) {
     summary += ' ' + t('Setting up the folder failed: {0}', e instanceof Error ? e.message : String(e));
   }
@@ -310,6 +310,8 @@ async function cmdLogin(arg) {
   const a = await accountOrPick(arg, t('Log in to which account?'));
   if (!a) return;
   if (a.kind !== 'subscription') return cmdEditEnv(a);
+  // The baseline of the login watch: what the folder holds now, not what was last cached.
+  await identity.refreshIdentity(a).catch(() => null);
   const term = env.createAccountTerminal(a, {
     name: t('Claude login: {0}', a.name),
     command: String(cfg('loginCommand') || 'claude auth login'),
@@ -317,10 +319,62 @@ async function cmdLogin(arg) {
     icon: 'key',
   });
   loginTerminals.add(term);
+  watchLogin(a, term);
+}
+
+const LOGIN_POLL_MS = 2000;
+const LOGIN_WAIT_MS = 15 * 60e3;
+/** @type {Map<vscode.Terminal, NodeJS.Timeout>} */
+const loginPolls = new Map();
+
+// Notices the login as soon as Claude Code saves it, without waiting for the terminal to close. Only
+// the account's files are read, and only when they changed. A login is done when the account becomes
+// signed in, or signed in to another e-mail. Signing in again to the same e-mail cannot be told apart
+// from Claude Code renewing its token in the same files, so that case is picked up when the terminal
+// closes (onTerminalClosed) instead of being announced early.
+/** @param {Account} a @param {vscode.Terminal} term */
+function watchLogin(a, term) {
+  const before = accounts.getIdentity(a.id);
+  const was = before?.loggedIn ? before.email : null;
+  const started = Date.now();
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (Date.now() - started > LOGIN_WAIT_MS) return stopLoginWatch(term);
+    if (busy || !loginPolls.has(term)) return;
+    busy = true;
+    try {
+      await identity.refreshIdentity(a);
+    } catch {
+      return;
+    } finally {
+      busy = false;
+    }
+    if (!loginPolls.has(term)) return; // stopped while reading
+    const now = accounts.getIdentity(a.id);
+    if (!now?.loggedIn || !now.email || now.email === was) return;
+    stopLoginWatch(term);
+    notifyChanged();
+    await health.refresh().catch(() => null);
+    vscode.window.showInformationMessage(t('Logged in to "{0}" as {1}.', a.name, now.email));
+  }, LOGIN_POLL_MS);
+  timer.unref?.();
+  loginPolls.set(term, timer);
+}
+
+/** @param {vscode.Terminal} term */
+function stopLoginWatch(term) {
+  const timer = loginPolls.get(term);
+  if (timer) clearInterval(timer);
+  loginPolls.delete(term);
+}
+
+function stopLoginWatches() {
+  for (const term of [...loginPolls.keys()]) stopLoginWatch(term);
 }
 
 /** @param {vscode.Terminal} term */
 function onTerminalClosed(term) {
+  stopLoginWatch(term);
   if (loginTerminals.delete(term))
     identity
       .refreshAllIdentities()
@@ -732,8 +786,9 @@ async function cmdShowUsage() {
     () => Promise.all(targets.map(async (a) => ({ a, u: await usage.computeUsage(a).catch(() => null) })))
   );
   const items = results.map(({ a, u }) => {
-    const q = f.quotaLine(a.id);
-    const lim = f.limitLine(a.id);
+    // With shared history the row covers every account: quota and limits are per account, listed below.
+    const q = shared ? '' : f.quotaLine(a.id);
+    const lim = shared ? '' : f.limitLine(a.id);
     return {
       label: shared ? t('All accounts (history is shared)') : a.name,
       description: [
@@ -755,10 +810,10 @@ async function cmdShowUsage() {
         : undefined,
     };
   });
-  if (shared && quota.enabled()) {
+  if (shared) {
     for (const a of accounts.allAccounts()) {
-      const q = f.quotaLine(a.id);
-      if (q) items.push({ label: a.name, description: q, detail: undefined });
+      const description = [f.quotaLine(a.id), f.limitLine(a.id)].filter(Boolean).join(' · ');
+      if (description) items.push({ label: a.name, description, detail: undefined });
     }
   }
   await vscode.window.showQuickPick(items, {
@@ -874,7 +929,7 @@ async function cmdImport({ prompt = false } = {}) {
 // ───────── live quota ─────────
 
 async function cmdToggleLiveQuota() {
-  const on = !quota.enabled();
+  const on = !quota.bridgeEnabled();
   if (on) {
     const enable = t('Turn on');
     const ok = await vscode.window.showInformationMessage(
@@ -882,7 +937,7 @@ async function cmdToggleLiveQuota() {
       {
         modal: true,
         detail: t(
-          'Claude Code passes your 5-hour and weekly usage to its status line. To read it, the extension wraps the statusLine command in settings.json with a small script that saves that input in the account folder and then runs your own status line unchanged. Turning this off restores your status line.\n\nQuota appears after the claude CLI shows its status line (for example in a terminal), for Pro and Max subscriptions.'
+          'Usage is already read from what Claude Code saves for each account. Live quota adds more frequent updates while the claude CLI runs in a terminal: the extension wraps the statusLine command in settings.json with a small script that saves its input in the account folder and then runs your own status line unchanged. Turning this off restores your status line.'
         ),
       },
       enable
@@ -897,8 +952,8 @@ async function onLiveQuotaChanged() {
   const errors = await quota.syncBridge();
   await quota.refreshAllQuota();
   if (errors.length) vscode.window.showWarningMessage(t('Live quota could not update some settings files: {0}', errors.join('; ')));
-  else if (quota.enabled())
-    vscode.window.showInformationMessage(t('Live quota is on. Usage appears after the claude CLI next shows its status line.'));
+  else if (quota.bridgeEnabled())
+    vscode.window.showInformationMessage(t('Live quota is on. Usage also updates whenever the claude CLI shows its status line.'));
 }
 
 // ───────── health checks that need the profile module ─────────
@@ -963,6 +1018,7 @@ module.exports = {
   cmdAdd,
   cmdLogin,
   onTerminalClosed,
+  stopLoginWatches,
   cmdOpenTerminal,
   cmdRename,
   cmdAppearance,

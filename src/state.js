@@ -39,7 +39,9 @@ const file = (/** @type {string} */ key) => path.join(dir(), `${key}.json`);
 /** @type {Map<string, { stamp: string, value: any }>} */
 const cache = new Map();
 
-// Reads a file through one descriptor (no check-then-open race), with a cache keyed by mtime and size.
+// Reads a file through one descriptor (no check-then-open race), with a cache keyed by inode, mtime and
+// size: other windows replace the files atomically, which always changes the inode, even when the size
+// and a coarse mtime (1 or 2 s on some file systems) stay the same.
 /** @param {string} p */
 function readJson(p) {
   let fd;
@@ -51,7 +53,7 @@ function readJson(p) {
   }
   try {
     const st = fs.fstatSync(fd);
-    const stamp = `${st.mtimeMs}:${st.size}`;
+    const stamp = `${st.ino}:${st.mtimeMs}:${st.size}`;
     const hit = cache.get(p);
     if (hit && hit.stamp === stamp) return hit.value;
     const value = JSON.parse(fs.readFileSync(fd, 'utf8'));

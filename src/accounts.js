@@ -48,10 +48,14 @@ const getAvatars = () => state.get(K.AVATARS, {});
 /** @param {Record<string, string>} m */
 const saveAvatars = (m) => state.update(K.AVATARS, m);
 
-/** @param {AccountRecord} rec @returns {Account} */
-function decorate(rec) {
-  const m = getMeta()[rec.id] || {};
-  return { ...rec, kind: rec.kind || 'subscription', name: m.name || rec.id, color: m.color, icon: m.icon, avatar: getAvatars()[rec.id] };
+/**
+ * @param {AccountRecord} rec @param {Record<string, any>} [meta] @param {Record<string, string>} [avatars]
+ *   read once by callers that decorate many records
+ * @returns {Account}
+ */
+function decorate(rec, meta = getMeta(), avatars = getAvatars()) {
+  const m = meta[rec.id] || {};
+  return { ...rec, kind: rec.kind || 'subscription', name: m.name || rec.id, color: m.color, icon: m.icon, avatar: avatars[rec.id] };
 }
 
 /** @returns {Account} */
@@ -59,7 +63,11 @@ function defaultAccount() {
   const m = getMeta()[DEFAULT_ID] || {};
   return { ...decorate({ id: DEFAULT_ID, dir: null, mode: 'original' }), name: m.name || t('Default (~/.claude)') };
 }
-const getAccounts = () => getRecords().map(decorate);
+const getAccounts = () => {
+  const meta = getMeta();
+  const avatars = getAvatars();
+  return getRecords().map((r) => decorate(r, meta, avatars));
+};
 const allAccounts = () => [defaultAccount(), ...getAccounts()];
 /** @param {string | undefined | null} id */
 const findAccount = (id) => (id ? allAccounts().find((a) => a.id === id) : undefined);

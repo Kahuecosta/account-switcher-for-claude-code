@@ -85,7 +85,8 @@ test('a limit in another folder is ignored; one in this window is offered with t
   for (const h of watcher.handlers) await h({ fsPath: here });
   const msg = messages.find((m) => /"Work" hit its usage limit/.test(m.text));
   assert.ok(msg, messages.map((m) => m.text).join(' | '));
-  assert.strictEqual(msg.items[0].title, 'Switch to B');
+  assert.strictEqual(msg.items[0].title, 'Continue in B', 'the best account, taking the conversation along');
+  assert.strictEqual(msg.items[1].title, 'Switch to B', 'or just switch, without the conversation');
   assert.ok(env.load('accounts').activeLimit('work'), 'recorded for every window');
 });
 
@@ -117,7 +118,8 @@ test('live quota above the threshold acts before the limit is hit', async () => 
   snapshot('b', 95, 30);
   const w = watchers.filter((x) => !x.disposed && x.pattern.pattern === '.multi-account-statusline.json').at(-1);
   for (const h of w.handlers) await h({ fsPath: path.join(dir('b'), '.multi-account-statusline.json') });
-  await tick();
+  // Reads are throttled (Claude Code writes .claude.json in bursts): wait for the next one.
+  for (let i = 0; i < 160 && !messages.some((m) => /has used 95%/.test(m.text)); i++) await tick(50);
   assert.ok(
     messages.some((m) => /"B" has used 95% of its 5-hour limit/.test(m.text)),
     messages.map((m) => m.text).join(' | ')

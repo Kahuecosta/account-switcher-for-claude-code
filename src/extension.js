@@ -20,6 +20,11 @@ const { createApi } = require('./api');
 const statusBar = require('./ui/statusBar');
 const { AccountsTree } = require('./ui/tree');
 const { pickAccount } = require('./ui/pickers');
+const { AccountsPanel, VIEW_ID } = require('./ui/panel');
+const handoff = require('./handoff');
+const perChat = require('./perChat');
+const rating = require('./rating');
+const live = require('./live');
 
 /** @param {string} id @param {(...args: any[]) => any} fn */
 function reg(id, fn) {
@@ -53,6 +58,9 @@ function activate(context) {
   const officialWasActive = !!vscode.extensions.getExtension(OFFICIAL_EXTENSION_ID)?.isActive;
 
   // First, synchronously: the environment, before the Claude Code extension starts its CLI.
+  perChat.init();
+  // The extension host's platform, which differs from the window's in remote windows (menus use it).
+  vscode.commands.executeCommand('setContext', 'claudeAccounts.perChatSupported', perChat.supported()).then(undefined, () => undefined);
   try {
     state.init();
     state.pullSynced();
@@ -79,6 +87,7 @@ function activate(context) {
   const item = statusBar.create();
   const tree = new AccountsTree();
   const treeView = vscode.window.createTreeView('claudeAccounts.accounts', { treeDataProvider: tree });
+  const panel = new AccountsPanel();
 
   // Coalesces bursts of changes into one refresh of the status bar.
   /** @type {NodeJS.Timeout | undefined} */
@@ -88,13 +97,19 @@ function activate(context) {
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
       statusBar.update();
+      if (perChat.active()) background('per-chat accounts', perChat.writeAccountsList);
     }, 50);
   };
 
   let lastFocusRefresh = 0;
+  const environmentVariables = () => live.userVariables(vscode.workspace.getConfiguration('claudeCode').get('environmentVariables'));
+  let lastEnvironmentVariables = environmentVariables();
   const minuteTimer = setInterval(() => {
     // Relative times ("resets in 20 min") and expiring limits.
-    if (Object.keys(accounts.getLimits()).length || quota.enabled()) scheduleUpdate();
+    if (Object.keys(accounts.getLimits()).length || quota.hasAny()) {
+      scheduleUpdate();
+      panel.schedule();
+    }
   }, 60e3);
 
   limits.init({ select: switching.selectAccount, choose: () => commands.cmdSwitch() });
@@ -107,7 +122,10 @@ function activate(context) {
     item,
     tree,
     treeView,
+    panel,
+    vscode.window.registerWebviewViewProvider(VIEW_ID, panel),
     switching.switched,
+    { dispose: () => commands.stopLoginWatches() },
     { dispose: () => clearInterval(minuteTimer) },
     { dispose: () => refreshTimer && clearTimeout(refreshTimer) },
     { dispose: () => limits.dispose() },
@@ -145,7 +163,26 @@ function activate(context) {
     }),
     reg('claudeAccounts.continueInTerminal', async (arg) => {
       const a = arg ? commands.accountArg(arg) : await pickAccount(t('Continue the latest conversation as which account?'));
-      if (a) limits.continueInTerminal(a);
+      if (a) await handoff.continueInTerminal(a);
+    }),
+    reg('claudeAccounts.continueInPanel', async (arg) => {
+      const cur = accounts.selectedAccount();
+      const a = arg
+        ? commands.accountArg(arg)
+        : await pickAccount(t('Continue the latest conversation of this folder with which account?'), { exclude: [cur.id] });
+      if (a) await handoff.continueInPanel(a);
+    }),
+    reg('claudeAccounts.newChatAs', async (arg) => {
+      if (!(await perChat.ensureEnabled())) return;
+      const a = arg
+        ? commands.accountArg(arg)
+        : await pickAccount(t('New Claude Code chat as which account?'), {
+            exclude: accounts
+              .allAccounts()
+              .filter((x) => !perChat.eligible(x))
+              .map((x) => x.id),
+          });
+      if (a) await perChat.openAs(a);
     }),
     switching.switched.event(() => {
       limits.restartWatcher();
@@ -156,6 +193,13 @@ function activate(context) {
     vscode.window.registerUriHandler({ handleUri: (uri) => handleUri(uri).catch((e) => reportError('uri', e)) }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('claudeAccounts') && !e.affectsConfiguration('claudeCode.environmentVariables')) return;
+      // A switch without a reload adds and removes an entry in claudeCode.environmentVariables (in any
+      // window): only a change of what is left counts.
+      if (!e.affectsConfiguration('claudeAccounts')) {
+        const now = environmentVariables();
+        if (now === lastEnvironmentVariables) return;
+        lastEnvironmentVariables = now;
+      }
       if (e.affectsConfiguration('claudeAccounts.applyToTerminal')) env.applyEnv(accounts.selectedAccount());
       if (e.affectsConfiguration('claudeAccounts.scope')) switching.syncFromStore();
       if (e.affectsConfiguration('claudeAccounts.gravatar')) background('identity', identity.refreshAllIdentities);
@@ -164,6 +208,13 @@ function activate(context) {
         quota.watchSelected(limits.checkQuota);
       }
       if (e.affectsConfiguration('claudeAccounts.onUsageLimit')) limits.restartWatcher();
+      if (e.affectsConfiguration('claudeAccounts.perChatAccounts') || e.affectsConfiguration('claudeAccounts.accountsRoot')) {
+        background('per-chat accounts', async () => {
+          const err = await perChat.sync();
+          if (err) vscode.window.showWarningMessage(err);
+          changed.fire(undefined); // the Accounts view shows "New chat" only while the mode is on
+        });
+      }
       if (e.affectsConfiguration('claudeAccounts.rules') || e.affectsConfiguration('claudeAccounts.autoApplyRepoDefault')) {
         background('auto-apply', switching.autoApply);
       }
@@ -218,15 +269,20 @@ async function afterActivation(first, autoApplied) {
       await store().update(K.SELECTED, first.id);
       await rt.ctx.workspaceState.update(K.LAST_APPLIED, first.id);
     }
+    await live.cleanup().catch((e) => rt.log.warn(`claudeCode.environmentVariables: ${e}`));
+    // The Claude Code panel started before this window's account was applied (a restored tab): tell it,
+    // so no reload is needed. The conversations it already started keep the launch account.
+    await switching.followSerially(first).catch((e) => rt.log.warn(`Following ${first.id}: ${e}`));
     await migrate().catch((e) => rt.log.error(`Migration: ${e}`));
     await profile.mirrorMcp(first).catch((e) => rt.log.warn(`MCP mirror: ${e}`));
     limits.restartWatcher();
     limits.arm();
-    if (quota.enabled()) {
-      quota.watchSelected(limits.checkQuota);
-      await quota.syncBridge();
-    }
+    quota.watchSelected(limits.checkQuota);
+    if (quota.bridgeEnabled()) await quota.syncBridge();
     await Promise.all([identity.refreshAllIdentities(), quota.refreshAllQuota()]);
+    const perChatError = await perChat.sync();
+    if (perChatError) vscode.window.showWarningMessage(perChatError);
+    await rating.init();
     await health.refresh();
     const usageTimer = setTimeout(() => background('usage', usage.refreshCurrentUsage), 3000);
     rt.ctx.subscriptions.push({ dispose: () => clearTimeout(usageTimer) });
@@ -242,9 +298,11 @@ async function afterActivation(first, autoApplied) {
  * @param {boolean} officialWasActive
  */
 async function startupPrompts(first, autoApplied, officialWasActive) {
+  // A conversation carried over before the reload reopens first: the prompts below wait for the user.
+  background('resume conversation', handoff.resumePending);
   if (autoApplied) {
     const msg = t('Claude Code account: {0} ({1}).', first.name, repo.reasonOf(autoApplied));
-    if (officialWasActive) background('notice', () => switching.maybeReload(msg));
+    if (officialWasActive && env.reloadPending(first.id)) background('notice', () => switching.maybeReload(msg));
     else vscode.window.showInformationMessage(msg);
   }
   try {
@@ -253,6 +311,9 @@ async function startupPrompts(first, autoApplied, officialWasActive) {
       await commands.cmdImport({ prompt: true });
     }
     await health.notify();
+    const ratingTimer = setTimeout(() => background('rating', rating.maybeAsk), 120e3);
+    ratingTimer.unref?.();
+    rt.ctx.subscriptions.push({ dispose: () => clearTimeout(ratingTimer) });
   } catch (e) {
     reportError('startup', e);
   }
