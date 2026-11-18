@@ -53,6 +53,33 @@ test('a synced default with another e-mail is not applied to the wrong login', a
   );
 });
 
+test('an uncertain start is settled by the session the restored panel registered', () => {
+  const environment = env.load('environment');
+  assert.ok(environment.state.uncertain, 'unverified while no session is known');
+  assert.strictEqual(environment.verifyStart([repoDir]), false, 'no session yet: the safe assumption stays');
+  assert.ok(environment.reloadPending('__default__'), 'while uncertain, switching to Default still reloads');
+  // The panel's CLI started after the environment was applied, so it registered in the account folder.
+  const session = { pid: process.pid, cwd: repoDir, startedAt: Date.now(), entrypoint: 'claude-vscode' };
+  write(path.join(other, 'sessions', `${process.pid}.json`), JSON.stringify(session));
+  assert.strictEqual(environment.verifyStart([repoDir]), true);
+  assert.strictEqual(environment.state.startedWithId, 'other');
+  assert.strictEqual(environment.state.uncertain, null);
+  assert.ok(!environment.reloadPending('other'), 'no false "reload pending" for the account in use');
+  assert.ok(environment.reloadPending('__default__'), 'switching back to Default reloads');
+  fs.rmSync(path.join(other, 'sessions'), { recursive: true, force: true });
+});
+
+test('a session in the launch folder confirms the panel kept the launch environment', () => {
+  const environment = env.load('environment');
+  environment.markStartUncertain({ id: 'other', dir: other }, path.join(home, '.claude'));
+  const session = { pid: process.pid, cwd: repoDir, startedAt: Date.now(), entrypoint: 'claude-vscode' };
+  write(path.join(home, '.claude', 'sessions', `${process.pid}.json`), JSON.stringify(session));
+  assert.strictEqual(environment.verifyStart([repoDir]), true);
+  assert.strictEqual(environment.state.startedWithId, '__default__');
+  assert.ok(environment.reloadPending('other'), 'the reload is still offered');
+  fs.rmSync(path.join(home, '.claude', 'sessions'), { recursive: true, force: true });
+});
+
 test('a default whose e-mail matches no login here applies nothing', () => {
   const repo = env.load('repo');
   assert.strictEqual(repo.accountForStored({ id: 'work', email: 'nobody@acme.com' }), null);

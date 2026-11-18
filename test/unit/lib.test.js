@@ -20,6 +20,7 @@ const { slugify, initials, isSingleEmoji, maskEmail } = require('../../lib/names
 const { findRepo, parseRemotes, pickRemote, repoInfo } = require('../../lib/git');
 const { samePath, isInside, tildify } = require('../../lib/paths');
 const { withLock } = require('../../lib/lock');
+const { panelSessions } = require('../../lib/sessions');
 
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cas-lib-')));
 const write = (p, c) => {
@@ -269,4 +270,26 @@ test('lock: exclusive, released after errors, stale lock taken over', async () =
   assert.strictEqual(await withLock(lock, async () => 'ok'), 'ok', 'old lock');
   fs.writeFileSync(lock, 'garbage');
   assert.strictEqual(await withLock(lock, async () => 'ok'), 'ok', 'unreadable lock');
+});
+
+test('panelSessions: live Claude Code panel sessions of the given folders only', () => {
+  const dir = tmp();
+  const proj = path.join(dir, 'proj');
+  const now = Date.now();
+  const s = (pid, extra) =>
+    write(
+      path.join(dir, 'sessions', `${pid}.json`),
+      JSON.stringify({ pid, cwd: proj, startedAt: now, entrypoint: 'claude-vscode', ...extra })
+    );
+  s(1);
+  s(2, { entrypoint: 'cli' }); // a terminal session, not the panel
+  s(3, { cwd: path.join(dir, 'elsewhere') });
+  s(4, { startedAt: now - 60e3 }); // started before `since`
+  s(5); // dead process
+  write(path.join(dir, 'sessions', '6.json'), '{ not json');
+  write(path.join(dir, 'sessions', '7.key'), 'x');
+  const alive = (/** @type {number} */ pid) => pid !== 5;
+  assert.deepStrictEqual(panelSessions(dir, { folders: [proj], since: now - 1000, alive }).sort(), [1]);
+  assert.deepStrictEqual(panelSessions(dir, { alive }).sort(), [1, 3, 4], 'no folder or time filter');
+  assert.deepStrictEqual(panelSessions(path.join(dir, 'missing')), []);
 });
