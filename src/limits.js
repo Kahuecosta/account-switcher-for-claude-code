@@ -9,6 +9,7 @@ const accounts = require('./accounts');
 const quota = require('./quota');
 const usage = require('./usage');
 const handoff = require('./handoff');
+const heavy = require('./heavy');
 const { encodeProjectDir, limitInfo, TailReader } = require('../lib/usage');
 const { peakUsage } = require('../lib/statusline');
 const { isInside } = require('../lib/paths');
@@ -158,10 +159,12 @@ function restartWatcher() {
     usage.scheduleRefresh();
     // With shared history the folder holds every window's conversations: only this one's count as its use.
     if (encoded.some((e) => uri.fsPath.split(/[\\/]/).includes(e))) quota.noteUse();
-    if (cfg('onUsageLimit') === 'ignore') return;
     try {
       const now = Date.now();
-      for (const o of await tail.readNew(uri.fsPath)) {
+      const entries = await tail.readNew(uri.fsPath);
+      heavy.note(entries.filter((o) => belongsHere(o, uri.fsPath))).catch((e) => rt.log.warn(`Heavy conversation: ${e}`));
+      if (cfg('onUsageLimit') === 'ignore') return;
+      for (const o of entries) {
         const info = limitInfo(o);
         if (!info) continue;
         const ts = Date.parse(o.timestamp);

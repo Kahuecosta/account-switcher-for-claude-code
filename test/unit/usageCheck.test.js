@@ -325,6 +325,8 @@ test('a window in the background checks only its own account, and only while Cla
     write(file, '{}\n');
     for (const h of w.handlers) await h({ fsPath: file });
   };
+  saved('b', Date.now() - 10 * MINUTE, 50);
+  await quota.checkAll({ only: 'b' }); // forgets its failed check, so only the rule tested here keeps it out
   const stale = () => ['a', 'b'].forEach((id) => saved(id, Date.now() - 10 * MINUTE, 50));
   env.vscode.window.state = { focused: false };
   stale();

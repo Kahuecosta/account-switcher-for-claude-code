@@ -7,13 +7,15 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { rt, cfg, DEFAULT_ID, baseDir, baseJsonPath, bridgeDir, storageDir, notifyChanged } = require('./runtime');
+const { rt, K, cfg, DEFAULT_ID, baseDir, baseJsonPath, bridgeDir, storageDir, notifyChanged } = require('./runtime');
 const accounts = require('./accounts');
+const state = require('./state');
 const env = require('./environment');
 const cli = require('./cli');
 const statusline = require('../lib/statusline');
 const usageCheck = require('../lib/usageCheck');
 const { readCachedUsage, mergeQuota } = require('../lib/quota');
+const { forecast } = require('../lib/pace');
 
 /** @typedef {import('./accounts').Account} Account */
 /** @typedef {import('../lib/quota').Quota} Quota */
@@ -49,6 +51,7 @@ async function refreshQuota(a) {
   const snap = mergeQuota(cached, bridged);
   const before = JSON.stringify(snapshots.get(a.id) || null);
   snapshots.set(a.id, snap);
+  addSample(a.id, snap);
   return { snap, changed: before !== JSON.stringify(snap) };
 }
 
@@ -57,6 +60,46 @@ async function refreshAllQuota() {
   for (const id of snapshots.keys()) if (!all.some((a) => a.id === id)) snapshots.delete(id);
   const results = await Promise.all(all.map((a) => refreshQuota(a).catch(() => ({ changed: false }))));
   if (results.some((r) => r.changed)) notifyChanged();
+}
+
+// ───────── pace ─────────
+
+const HOUR = 3600e3;
+const SAMPLES_KEPT_MS = 2 * HOUR;
+
+/** @param {string} id @param {Quota | null} snap */
+function addSample(id, snap) {
+  const w = snap && snap.fiveHour;
+  if (!w || !w.resetsAt || typeof snap.at !== 'number') return;
+  const at = snap.at;
+  try {
+    /** @type {Record<string, [number, number, number][]>} */
+    const all = state.get(K.SAMPLES, {});
+    const list = all[id] || [];
+    if (list.some((s) => s[0] >= at)) return; // known, here or in another window
+    state.set(K.SAMPLES, { ...all, [id]: [...list.filter((s) => at - s[0] < SAMPLES_KEPT_MS), [at, w.usedPct, w.resetsAt]] });
+  } catch (e) {
+    rt.log.warn(`Usage samples: ${e}`);
+  }
+}
+
+// When each window will be used up at its pace: the last 45 minutes for the 5-hour one, its average for the
+// weekly one. Null without a recent reading, or when there is too little to tell.
+/** @param {string} id */
+function paceOf(id, now = Date.now()) {
+  const q = quotaOf(id);
+  if (!q || typeof q.at !== 'number') return { fiveHour: null, sevenDay: null };
+  const { at, fiveHour, sevenDay } = q;
+  /** @type {[number, number, number][]} */
+  const read = state.get(K.SAMPLES, {})[id] || [];
+  const samples = read
+    .filter((s) => fiveHour && fiveHour.resetsAt && Math.abs(s[2] - fiveHour.resetsAt) < 10 * 60e3)
+    .map((s) => ({ at: s[0], pct: s[1] }));
+  return {
+    fiveHour:
+      now - at < 20 * 60e3 ? forecast(fiveHour, { at, samples, lengthMs: 5 * HOUR, recentMs: 45 * 60e3, minSpanMs: 10 * 60e3 }) : null,
+    sevenDay: now - at < 6 * HOUR ? forecast(sevenDay, { at, lengthMs: 7 * 24 * HOUR, minSpanMs: 12 * HOUR }) : null,
+  };
 }
 
 // ───────── asking Claude Code to check ─────────
@@ -295,6 +338,7 @@ function dispose() {
 module.exports = {
   bridgeEnabled,
   quotaOf,
+  paceOf,
   hasAny,
   jsonPathOf,
   refreshQuota,

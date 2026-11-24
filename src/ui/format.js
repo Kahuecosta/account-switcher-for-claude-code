@@ -71,6 +71,13 @@ function limitLine(id) {
   return l.estimated ? t('usage limit reached') : t('usage limit reached, resets {0}', clock(l.until));
 }
 
+// When a window runs out at its pace, or ''.
+/** @param {import('../../lib/pace').Pace | null} p */
+function paceLine(p) {
+  if (!p) return '';
+  return p.runsOut && p.hitAt ? t('At this pace it runs out at {0}', clock(p.hitAt)) : t('At this pace it lasts until it resets');
+}
+
 // Escapes user-provided text for a MarkdownString.
 /** @param {string} s */
 const md = (s) => String(s).replace(/[\\`*_{}[\]()#+\-.!|<>~$]/g, '\\$&');
@@ -78,4 +85,17 @@ const md = (s) => String(s).replace(/[\\`*_{}[\]()#+\-.!|<>~$]/g, '\\$&');
 /** @returns {boolean} */
 const showQuota = () => cfg('showQuota') !== false;
 
-module.exports = { formatDate, themeColor, isEmojiIcon, iconText, shortName, relative, clock, quotaLine, limitLine, md, showQuota };
+module.exports = {
+  formatDate,
+  themeColor,
+  isEmojiIcon,
+  iconText,
+  shortName,
+  relative,
+  clock,
+  quotaLine,
+  limitLine,
+  paceLine,
+  md,
+  showQuota,
+};

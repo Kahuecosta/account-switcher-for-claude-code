@@ -110,7 +110,8 @@ function activate(context) {
       scheduleUpdate();
       panel.schedule();
     }
-    background('usage check', quota.autoCheck);
+    background('usage check', () => quota.autoCheck());
+    background('sessions', usage.noteSessions);
   }, 60e3);
 
   limits.init({ select: switching.selectAccount, choose: () => commands.cmdSwitch() });
@@ -129,6 +130,7 @@ function activate(context) {
     { dispose: () => commands.stopLoginWatches() },
     { dispose: () => clearInterval(minuteTimer) },
     { dispose: () => refreshTimer && clearTimeout(refreshTimer) },
+    { dispose: () => statusBar.dispose() },
     { dispose: () => limits.dispose() },
     { dispose: () => quota.dispose() },
     { dispose: () => usage.dispose() },

@@ -4,13 +4,17 @@
 // adds no behavior of its own. The Explorer tree stays as the plain-list alternative.
 const vscode = require('vscode');
 const crypto = require('crypto');
+const path = require('path');
 const { t, COLORS, changed } = require('../runtime');
 const accounts = require('../accounts');
 const quota = require('../quota');
+const usage = require('../usage');
+const heavy = require('../heavy');
 const identity = require('../identity');
 const env = require('../environment');
 const perChat = require('../perChat');
 const f = require('./format');
+const { formatTokens } = require('../../lib/usage');
 
 /** @typedef {import('../accounts').Account} Account */
 
@@ -43,8 +47,11 @@ function money(n, currency) {
   return n.toFixed(2) + (currency ? ` ${currency}` : '');
 }
 
-/** @param {string} label @param {{ usedPct: number, resetsAt: number | null } | null | undefined} w */
-function windowModel(label, w) {
+/**
+ * @param {string} label @param {{ usedPct: number, resetsAt: number | null } | null | undefined} w
+ * @param {import('../../lib/pace').Pace | null} [pace]
+ */
+function windowModel(label, w, pace = null) {
   if (!w) return null;
   const pct = Math.round(w.usedPct);
   return {
@@ -53,6 +60,8 @@ function windowModel(label, w) {
     text: `${pct}%`,
     resets: w.resetsAt ? t('resets {0}', f.relative(w.resetsAt)) : '',
     aria: t('{0}: {1}% used', label, pct),
+    pace: f.paceLine(pace),
+    runsOut: !!pace && pace.runsOut,
   };
 }
 
@@ -66,15 +75,43 @@ function ageNote(id, at, now) {
   return quota.autoChecks() && quota.pausedUntil(id, now) ? `${age} · ${t('paused until it resets')}` : age;
 }
 
+// What used up the account's windows, by conversation.
+/** @param {string} id */
+function usedModel(id) {
+  const used = usage.usedByOf(id);
+  if (!used) return [];
+  return /** @type {const} */ ([
+    [t('5-hour'), used.fiveHour],
+    [t('weekly'), used.sevenDay],
+  ]).flatMap(([label, u]) =>
+    u
+      ? [
+          {
+            label,
+            rows: u.rows.map((r) => ({
+              share: `${Math.round(r.pct)}%`,
+              project: r.cwd ? path.basename(r.cwd.replace(/[\\/]+$/, '').replace(/\\/g, '/')) : '?',
+              title: (r.title || r.session.slice(0, 8)).replace(/\s+/g, ' ').slice(0, 120),
+              context: r.context ? t('{0} per response', formatTokens(r.context)) : '',
+              heavy: heavy.isHeavy(r.context),
+            })),
+            others: u.others >= 0.5 ? t('others: {0}%', Math.round(u.others)) : '',
+          },
+        ]
+      : []
+  );
+}
+
 /** @param {Account} a @param {Account} cur */
 function cardModel(a, cur, now = Date.now()) {
   const q = quota.quotaOf(a.id);
   const signedIn = accounts.isSignedIn(a);
   const subscription = a.kind === 'subscription';
+  const pace = quota.paceOf(a.id, now);
   const windows = q
     ? [
-        windowModel(t('5-hour'), q.fiveHour),
-        windowModel(t('weekly'), q.sevenDay),
+        windowModel(t('5-hour'), q.fiveHour, pace.fiveHour),
+        windowModel(t('weekly'), q.sevenDay, pace.sevenDay),
         ...(q.models || []).map((m) => windowModel(t('{0} weekly', m.name), m)),
       ].filter(Boolean)
     : [];
@@ -103,6 +140,7 @@ function cardModel(a, cur, now = Date.now()) {
     newChat: perChat.active() && perChat.eligible(a),
     canRefresh: quota.checkable(a),
     checking: quota.isChecking(a.id),
+    used: usedModel(a.id),
   };
 }
 
@@ -132,6 +170,9 @@ function viewModel() {
       notLoggedIn: t('Not logged in'),
       refresh: t('Refresh the usage of this account'),
       refreshing: t('Checking usage...'),
+      used: t('What used it'),
+      usedTitle: t('Estimate: shares of what this computer used with the account'),
+      heavy: t('Heavy conversation: /compact, or a new chat, makes your plan last longer'),
     },
   };
 }
@@ -224,6 +265,17 @@ button.icon.busy svg{animation:spin 1s linear infinite}
 .fill{height:100%;background:var(--vscode-charts-blue,var(--vscode-progressBar-background))}
 .fill.warn{background:var(--vscode-charts-yellow)}
 .fill.crit{background:var(--vscode-charts-red)}
+.pace{font-size:.85em;color:var(--vscode-descriptionForeground);margin-top:1px}
+.pace.out{color:var(--vscode-editorWarning-foreground,var(--vscode-charts-yellow))}
+details{margin-top:6px;font-size:.88em}
+summary{cursor:pointer;color:var(--vscode-descriptionForeground)}
+summary:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
+.used h4{margin:6px 0 2px;font-weight:600;font-size:1em;color:var(--vscode-descriptionForeground)}
+.use{display:grid;grid-template-columns:2.8em minmax(0,1fr);column-gap:4px;margin-top:2px}
+.use .share{font-variant-numeric:tabular-nums;text-align:right}
+.use .what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.use .ctx{grid-column:2;color:var(--vscode-descriptionForeground);font-size:.95em}
+.use .ctx.heavy{color:var(--vscode-editorWarning-foreground,var(--vscode-charts-yellow))}
 .actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 button{font:inherit;font-size:.92em;border:1px solid var(--vscode-button-border,var(--vscode-widget-border,transparent));border-radius:2px;padding:2px 8px;cursor:pointer;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}
 button:hover{background:var(--vscode-button-secondaryHoverBackground)}
@@ -243,6 +295,7 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
   const root = document.getElementById('root');
   const bannerHost = document.getElementById('banner');
   let shownBanner = null;
+  const open = new Set((vscode.getState() || {}).open || []);
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -292,7 +345,38 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     fill.style.width = Math.max(0, Math.min(100, w.pct)) + '%';
     bar.append(fill);
     m.append(top, bar);
+    if (w.pace) m.append(el('div', 'pace' + (w.runsOut ? ' out' : ''), w.pace));
     return m;
+  }
+  function usedSection(c, s) {
+    const d = el('details', 'used');
+    d.open = open.has(c.id);
+    const sum = el('summary', '', s.used);
+    sum.title = s.usedTitle;
+    sum.dataset.key = 'used:' + c.id;
+    d.append(sum);
+    d.addEventListener('toggle', () => {
+      if (d.open) open.add(c.id);
+      else open.delete(c.id);
+      vscode.setState({ open: Array.from(open) });
+    });
+    for (const w of c.used) {
+      d.append(el('h4', '', w.label));
+      for (const r of w.rows) {
+        const row = el('div', 'use');
+        const what = el('span', 'what', r.project + ' · ' + r.title);
+        what.title = r.project + ' · ' + r.title;
+        row.append(el('span', 'share', r.share), what);
+        if (r.context) {
+          const ctx = el('span', 'ctx' + (r.heavy ? ' heavy' : ''), (r.heavy ? '⚠ ' : '') + r.context);
+          if (r.heavy) ctx.title = s.heavy;
+          row.append(ctx);
+        }
+        d.append(row);
+      }
+      if (w.others) d.append(el('div', 'note', w.others));
+    }
+    return d;
   }
   function card(c, s) {
     const li = el('li', 'card' + (c.current ? ' current' : '') + (c.color ? ' c-' + c.color : ''));
@@ -308,6 +392,7 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     if (c.limit) li.append(el('div', 'limit', c.limit));
     for (const w of c.windows) li.append(meter(w));
     for (const n of c.notes) li.append(el('div', 'note', n));
+    if (c.used.length) li.append(usedSection(c, s));
     const actions = el('div', 'actions');
     if (c.loggedOut) actions.append(button(s.login, 'login', c.id, { primary: true }));
     if (!c.current) {
@@ -344,7 +429,7 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     footer.append(button(s.add, 'add', undefined, { primary: m.cards.length < 2 }), button(s.usage, 'usage'));
     root.append(footer);
     if (focused) {
-      const again = Array.from(document.querySelectorAll('button')).find((b) => b.dataset.key === focused);
+      const again = Array.from(document.querySelectorAll('button, summary')).find((b) => b.dataset.key === focused);
       if (again) again.focus();
     }
   }

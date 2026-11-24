@@ -14,6 +14,9 @@ const { peakUsage } = require('../../lib/statusline');
 
 /** @type {vscode.StatusBarItem | undefined} */
 let item;
+/** Items of the other accounts (statusBarUsage "all"), by account id. @type {Map<string, vscode.StatusBarItem>} */
+const others = new Map();
+const MAX_OTHERS = 4;
 
 const LINK_COMMANDS = [
   'claudeAccounts.switch',
@@ -51,7 +54,9 @@ function update() {
   if (cfg('showPlan') && id?.plan && style !== 'icon') text += ` · ${id.plan}`;
   // The window closest to its limit: a full week matters even when the 5-hour window is empty.
   const shown = q ? [q.fiveHour, q.sevenDay].filter(Boolean).sort((x, y) => y.usedPct - x.usedPct)[0] : null;
-  if (shown) text += ` · ${Math.round(shown.usedPct)}%`;
+  const both = q && cfg('statusBarUsage') !== 'window' ? f.quotaLine(cur.id) : '';
+  if (both) text += ` · ${both}`;
+  else if (shown) text += ` · ${Math.round(shown.usedPct)}%`;
   if (limit) text += limit.estimated ? ' $(watch)' : ` $(watch) ${f.clock(limit.until)}`;
   if (pending) text = `$(sync) ${text}`;
   if (issues.length) text = `$(warning) ${text}`;
@@ -93,6 +98,9 @@ function update() {
         )
       )
     );
+  const pace = quota.paceOf(cur.id);
+  if (q?.fiveHour && pace.fiveHour) line(f.md(`${t('5-hour')}: ${f.paceLine(pace.fiveHour)}`));
+  if (q?.sevenDay && pace.sevenDay) line(f.md(`${t('weekly')}: ${f.paceLine(pace.sevenDay)}`));
   if (limit)
     line(
       `$(watch) ${f.md(limit.estimated ? t('Usage limit reached.') : t('Usage limit reached. Resets {0} ({1}).', f.clock(limit.until), f.relative(limit.until)))}`
@@ -134,6 +142,60 @@ function update() {
   if (issues.length) a11y.push(t('{0} setup issue(s).', issues.length));
   item.accessibilityInformation = { label: a11y.join(', '), role: 'button' };
   item.show();
+  updateOthers(cur);
 }
 
-module.exports = { create, update };
+// The other accounts' 5-hour and weekly usage, one item each. A click opens the Claude Accounts view: it
+// never switches, so a stray one cannot reload the window.
+/** @param {import('../accounts').Account} cur */
+function updateOthers(cur) {
+  const list =
+    f.showQuota() && cfg('statusBarUsage') === 'all'
+      ? accounts
+          .allAccounts()
+          .filter((a) => a.id !== cur.id && f.quotaLine(a.id))
+          .slice(0, MAX_OTHERS)
+      : [];
+  for (const [id, it] of others) {
+    if (list.some((a) => a.id === id)) continue;
+    it.dispose();
+    others.delete(id);
+  }
+  list.forEach((a, i) => {
+    let it = others.get(a.id);
+    if (!it) {
+      it = vscode.window.createStatusBarItem(`claudeAccounts.status.${a.id}`, vscode.StatusBarAlignment.Left, 99 - i);
+      it.name = `${EXTENSION_NAME}: ${a.name}`;
+      it.command = 'claudeAccounts.panel.focus';
+      others.set(a.id, it);
+    }
+    const q = quota.quotaOf(a.id);
+    const limit = accounts.activeLimit(a.id);
+    const usage = f.quotaLine(a.id);
+    it.text = `${f.iconText(a)} ${usage}${limit && !limit.estimated ? ` $(watch) ${f.clock(limit.until)}` : ''}`;
+    it.color = f.themeColor(a.color);
+    const tip = new vscode.MarkdownString('', true);
+    const line = (/** @type {string} */ s) => tip.appendMarkdown(`${f.md(s)}  \n`);
+    tip.appendMarkdown(`**${f.md(a.name)}**  \n`);
+    const pace = quota.paceOf(a.id);
+    for (const [label, w, p] of /** @type {const} */ ([
+      [t('5-hour'), q?.fiveHour, pace.fiveHour],
+      [t('weekly'), q?.sevenDay, pace.sevenDay],
+    ])) {
+      if (!w) continue;
+      line([`${label}: ${Math.round(w.usedPct)}%`, w.resetsAt ? t('resets {0}', f.relative(w.resetsAt)) : ''].filter(Boolean).join(' · '));
+      if (p) line(f.paceLine(p));
+    }
+    if (limit) line(f.limitLine(a.id));
+    it.tooltip = tip;
+    it.accessibilityInformation = { label: [a.name, usage, f.limitLine(a.id)].filter(Boolean).join(', '), role: 'button' };
+    it.show();
+  });
+}
+
+function dispose() {
+  for (const it of others.values()) it.dispose();
+  others.clear();
+}
+
+module.exports = { create, update, dispose };

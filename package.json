@@ -711,6 +711,22 @@
           "default": true,
           "markdownDescription": "%cfg.showQuota%"
         },
+        "claudeAccounts.statusBarUsage": {
+          "order": 13,
+          "type": "string",
+          "enum": [
+            "window",
+            "both",
+            "all"
+          ],
+          "enumDescriptions": [
+            "%cfg.statusBarUsage.window%",
+            "%cfg.statusBarUsage.both%",
+            "%cfg.statusBarUsage.all%"
+          ],
+          "default": "window",
+          "description": "%cfg.statusBarUsage%"
+        },
         "claudeAccounts.onUsageLimit": {
           "order": 20,
           "type": "string",
@@ -750,6 +766,13 @@
           "minimum": 0,
           "default": 5,
           "markdownDescription": "%cfg.usageCheckMinutes%"
+        },
+        "claudeAccounts.heavyConversationTokens": {
+          "order": 24,
+          "type": "number",
+          "minimum": 0,
+          "default": 300000,
+          "markdownDescription": "%cfg.heavyConversationTokens%"
         },
         "claudeAccounts.shareHistory": {
           "order": 30,
