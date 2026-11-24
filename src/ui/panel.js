@@ -28,9 +28,10 @@ const ACTIONS = {
   add: 'claudeAccounts.add',
   usage: 'claudeAccounts.showUsage',
   refresh: 'claudeAccounts.refresh',
+  refreshAccount: 'claudeAccounts.refreshAccount',
   reload: 'workbench.action.reloadWindow',
 };
-const NEEDS_ACCOUNT = new Set(['switch', 'login', 'terminal', 'continue', 'newChat', 'manage']);
+const NEEDS_ACCOUNT = new Set(['switch', 'login', 'terminal', 'continue', 'newChat', 'manage', 'refreshAccount']);
 
 /** @param {number} n @param {string | null} currency */
 function money(n, currency) {
@@ -55,6 +56,16 @@ function windowModel(label, w) {
   };
 }
 
+// How old the figures are and, when they are not checked on their own for now, why.
+/** @param {string} id @param {number} at @param {number} now */
+function ageNote(id, at, now) {
+  const minutes = Math.floor((now - at) / 60e3);
+  let age = t('as of {0}', f.clock(at));
+  if (minutes < 1) age = t('Updated just now');
+  else if (now - at <= STALE_MS) age = t('Updated {0} min ago', minutes);
+  return quota.autoChecks() && quota.pausedUntil(id, now) ? `${age} · ${t('paused until it resets')}` : age;
+}
+
 /** @param {Account} a @param {Account} cur */
 function cardModel(a, cur, now = Date.now()) {
   const q = quota.quotaOf(a.id);
@@ -76,7 +87,7 @@ function cardModel(a, cur, now = Date.now()) {
         q.extra.limit === null ? '?' : money(q.extra.limit, q.extra.currency)
       )
     );
-  if (q?.at && now - q.at > STALE_MS) notes.push(t('as of {0}', f.clock(q.at)));
+  if (q?.at) notes.push(ageNote(a.id, q.at, now));
   if (!q && subscription && signedIn) notes.push(t('Usage appears after Claude Code checks it for this account.'));
   return {
     id: a.id,
@@ -90,6 +101,8 @@ function cardModel(a, cur, now = Date.now()) {
     windows,
     notes,
     newChat: perChat.active() && perChat.eligible(a),
+    canRefresh: quota.checkable(a),
+    checking: quota.isChecking(a.id),
   };
 }
 
@@ -117,6 +130,8 @@ function viewModel() {
       reload: t('Reload window'),
       empty: t('Add an account to use several Claude Code accounts.'),
       notLoggedIn: t('Not logged in'),
+      refresh: t('Refresh the usage of this account'),
+      refreshing: t('Checking usage...'),
     },
   };
 }
@@ -191,6 +206,15 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px
 ${colorRules}
 .head{display:flex;align-items:center;gap:6px;font-weight:600}
 .head .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head .spacer{flex:1}
+button.icon{display:flex;padding:3px;border-color:transparent;background:transparent;color:var(--vscode-icon-foreground,var(--vscode-foreground))}
+button.icon:hover{background:var(--vscode-toolbar-hoverBackground,var(--vscode-button-secondaryHoverBackground))}
+button.icon svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+button.icon.busy{cursor:default}
+button.icon.busy svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){button.icon.busy svg{animation:none;opacity:.5}}
+.vscode-reduce-motion button.icon.busy svg{animation:none;opacity:.5}
 .badge{font-size:.85em;font-weight:400;padding:0 6px;border-radius:8px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground)}
 .line,.note{color:var(--vscode-descriptionForeground);font-size:.92em;margin-top:2px;overflow-wrap:anywhere}
 .limit{color:var(--vscode-errorForeground);font-size:.92em;margin-top:2px}
@@ -230,9 +254,30 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     b.type = 'button';
     b.dataset.key = action + ':' + (id || '');
     if (opts && opts.title) b.title = opts.title;
-    b.addEventListener('click', () => vscode.postMessage({ type: 'action', action, id }));
+    b.addEventListener('click', () => {
+      if (!opts || !opts.busy) vscode.postMessage({ type: 'action', action, id });
+    });
     return b;
   };
+  function refreshButton(c, s) {
+    const label = c.checking ? s.refreshing : s.refresh;
+    const b = button('', 'refreshAccount', c.id, { title: label, busy: c.checking });
+    b.className = 'icon' + (c.checking ? ' busy' : '');
+    b.setAttribute('aria-label', label + ' (' + c.name + ')');
+    // Not "disabled": that would take the keyboard focus away from it.
+    b.setAttribute('aria-disabled', String(c.checking));
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const d of ['M13.5 8a5.5 5.5 0 1 1-1.7-4', 'M13.5 1.5v3h-3']) {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.append(p);
+    }
+    b.append(svg);
+    return b;
+  }
   function meter(w) {
     const m = el('div', 'meter');
     const top = el('div', 'top');
@@ -256,6 +301,7 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     if (c.emoji) head.append(el('span', '', c.emoji));
     head.append(el('span', 'name', c.name));
     if (c.current) head.append(el('span', 'badge', s.current));
+    if (c.canRefresh) head.append(el('span', 'spacer'), refreshButton(c, s));
     li.append(head);
     if (c.loggedOut) li.append(el('div', 'line', s.notLoggedIn));
     else if (c.line) li.append(el('div', 'line', c.line));

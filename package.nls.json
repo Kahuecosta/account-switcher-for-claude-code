@@ -34,6 +34,7 @@
   "cmd.reviewIssues": "Review setup issues",
   "cmd.showLog": "Show log",
   "cmd.refresh": "Refresh",
+  "cmd.refreshAccount": "Refresh usage of account...",
   "view.accounts": "Claude Accounts",
   "view.container": "Claude Accounts",
   "view.panel": "Claude Accounts",

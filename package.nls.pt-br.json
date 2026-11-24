@@ -34,6 +34,7 @@
   "cmd.reviewIssues": "Revisar problemas de configuração",
   "cmd.showLog": "Mostrar log",
   "cmd.refresh": "Atualizar",
+  "cmd.refreshAccount": "Atualizar o uso de uma conta...",
   "view.accounts": "Contas do Claude",
   "view.container": "Contas do Claude",
   "view.panel": "Contas do Claude",

@@ -780,7 +780,18 @@ async function cmdAddRule() {
 // Refreshes everything shown, including the plan usage: Claude Code checks it for each account now.
 async function cmdRefresh() {
   await Promise.all([identity.refreshAllIdentities(), quota.refreshAllQuota(), health.refresh(), usage.refreshCurrentUsage()]);
-  const failed = await quota.checkAll();
+  reportUnchecked(await quota.checkAll());
+}
+
+/** @param {any} [arg] */
+async function cmdRefreshAccount(arg) {
+  const unavailable = accounts.allAccounts().filter((a) => !quota.checkable(a));
+  const a = arg ? accountArg(arg) : await pickAccount(t('Refresh the usage of which account?'), { exclude: unavailable.map((x) => x.id) });
+  if (a) reportUnchecked(await quota.checkAll({ only: a.id }));
+}
+
+/** @param {Account[]} failed */
+function reportUnchecked(failed) {
   if (!failed.length) return;
   const showLog = t('Show log');
   // Not awaited: the progress ends now, whenever the message is answered.
@@ -1046,6 +1057,7 @@ module.exports = {
   cmdClearRepoDefault,
   cmdAddRule,
   cmdRefresh,
+  cmdRefreshAccount,
   cmdShowUsage,
   cmdToggleHistory,
   findUnregisteredDirs,

@@ -273,6 +273,12 @@
         "title": "%cmd.refresh%",
         "category": "%category%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeAccounts.refreshAccount",
+        "title": "%cmd.refreshAccount%",
+        "category": "%category%",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {

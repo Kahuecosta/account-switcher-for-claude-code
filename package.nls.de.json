@@ -34,6 +34,7 @@
   "cmd.reviewIssues": "Einrichtungsprobleme überprüfen",
   "cmd.showLog": "Protokoll anzeigen",
   "cmd.refresh": "Aktualisieren",
+  "cmd.refreshAccount": "Nutzung eines Kontos aktualisieren...",
   "view.accounts": "Claude-Konten",
   "view.container": "Claude-Konten",
   "view.panel": "Claude-Konten",

@@ -34,6 +34,7 @@
   "cmd.reviewIssues": "查看配置问题",
   "cmd.showLog": "显示日志",
   "cmd.refresh": "刷新",
+  "cmd.refreshAccount": "刷新账户用量...",
   "view.accounts": "Claude 账户",
   "view.container": "Claude 账户",
   "view.panel": "Claude 账户",

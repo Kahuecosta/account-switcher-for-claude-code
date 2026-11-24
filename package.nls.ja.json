@@ -34,6 +34,7 @@
   "cmd.reviewIssues": "セットアップの問題を確認",
   "cmd.showLog": "ログの表示",
   "cmd.refresh": "最新の情報に更新",
+  "cmd.refreshAccount": "アカウントの使用量を更新...",
   "view.accounts": "Claude アカウント",
   "view.container": "Claude アカウント",
   "view.panel": "Claude アカウント",

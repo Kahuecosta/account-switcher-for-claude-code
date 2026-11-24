@@ -160,6 +160,7 @@ function activate(context) {
     reg('claudeAccounts.importSettings', transfer.cmdImportSettings),
     reg('claudeAccounts.showLog', () => rt.log.show()),
     reg('claudeAccounts.refresh', () => vscode.window.withProgress({ location: { viewId: VIEW_ID } }, commands.cmdRefresh)),
+    reg('claudeAccounts.refreshAccount', commands.cmdRefreshAccount),
     reg('claudeAccounts.continueInTerminal', async (arg) => {
       const a = arg ? commands.accountArg(arg) : await pickAccount(t('Continue the latest conversation as which account?'));
       if (a) await handoff.continueInTerminal(a);

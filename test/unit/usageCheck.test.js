@@ -92,7 +92,7 @@ test('the real arguments: no customizations, no tools, no saved conversation', (
 
 /** Ids of the accounts checked, in order. @type {string[]} */
 const checks = [];
-const saved = (id, at, five) =>
+const saved = (id, at, five, { resets = Date.now() + 3600e3, seven, extra } = {}) =>
   write(
     path.join(dir(id), '.claude.json'),
     JSON.stringify({
@@ -103,7 +103,11 @@ const saved = (id, at, five) =>
           : {
               accountUuid: id,
               fetchedAtMs: at,
-              utilization: { five_hour: { utilization: five, resets_at: new Date(Date.now() + 3600e3).toISOString() } },
+              utilization: {
+                five_hour: { utilization: five, resets_at: new Date(resets).toISOString() },
+                seven_day: seven,
+                extra_usage: extra,
+              },
             },
     })
   );
@@ -201,4 +205,112 @@ test('each check runs with the environment of its own account', async () => {
   assert.strictEqual(seen.length, 1);
   assert.strictEqual(seen[0].dir, dir('b'), 'not the account of this window');
   assert.strictEqual(seen[0].cwd, context.globalStorageUri.fsPath, 'outside any project');
+});
+
+// ───────── one account ─────────
+
+const card = (id) =>
+  env
+    .load('ui/panel')
+    .viewModel()
+    .cards.find((c) => c.id === id);
+
+test('one account: only that one is checked, and its card shows it meanwhile', async () => {
+  const provider = env.webviews.get('claudeAccounts.panel');
+  saved('a', Date.now() - 10 * MINUTE, 50);
+  saved('b', Date.now() - 10 * MINUTE, 50);
+  await env.load('quota').refreshAllQuota();
+  checks.length = 0;
+  const run = provider.onMessage({ type: 'action', action: 'refreshAccount', id: 'b' });
+  await tick(1);
+  assert.strictEqual(card('b').checking, true);
+  assert.strictEqual(card('a').checking, false);
+  await run;
+  assert.deepStrictEqual(checks, ['b']);
+  assert.strictEqual(card('b').checking, false);
+  assert.ok(card('b').notes.includes('Updated just now · paused until it resets'), card('b').notes.join(' | '));
+  assert.ok(card('a').notes.includes('Updated 10 min ago'), card('a').notes.join(' | '));
+  await provider.onMessage({ type: 'action', action: 'refreshAccount', id: 'nobody' });
+  await provider.onMessage({ type: 'action', action: 'refreshAccount' });
+  assert.deepStrictEqual(checks, ['b'], 'only for a known account');
+});
+
+test('one account: waits for the running check, and clicks on a fresh reading start nothing', async () => {
+  saved('a', Date.now() - 10 * MINUTE, 50);
+  saved('b', Date.now() - 10 * MINUTE, 50);
+  checks.length = 0;
+  const one = (id) => commands.get('claudeAccounts.refreshAccount')(id);
+  await Promise.all([commands.get('claudeAccounts.refresh')(), one('b'), one('b'), one('a')]);
+  assert.deepStrictEqual([...checks].sort(), ['a', 'b'], 'each account once');
+  assert.ok(!card('a').checking && !card('b').checking);
+});
+
+test('one account: a failure is reported; accounts without plan limits have no button and are not offered', async () => {
+  claude = () => false;
+  saved('b', Date.now() - 10 * MINUTE, 50);
+  messages.length = 0;
+  await commands.get('claudeAccounts.refreshAccount')('b');
+  claude = () => true;
+  assert.ok(messages.some((m) => m.type === 'warning' && /could not check the usage of b\b/.test(m.text)));
+  assert.strictEqual(card('b').checking, false);
+  assert.deepStrictEqual(
+    ['a', 'b', 'out', 'key', '__default__'].map((id) => card(id).canRefresh),
+    [true, true, false, false, false]
+  );
+  env.pickQuick = () => undefined;
+  messages.length = 0;
+  await commands.get('claudeAccounts.refreshAccount')();
+  const offered = messages
+    .find((m) => m.type === 'quickPick')
+    .items.map((i) => i.account?.id)
+    .filter(Boolean);
+  assert.deepStrictEqual(offered.sort(), ['a', 'b']);
+  checks.length = 0;
+  await commands.get('claudeAccounts.refreshAccount')('key');
+  assert.deepStrictEqual(checks, []);
+});
+
+// ───────── used up ─────────
+
+test('an account that is used up is left alone until it resets; asking for it still checks it', async () => {
+  const quota = env.load('quota');
+  const { refreshQuota, autoCheck, pausedUntil } = quota;
+  const resets = Date.now() + 40 * MINUTE;
+  saved('a', Date.now() - 20 * MINUTE, 100, { resets });
+  saved('b', Date.now() - 1000, 99);
+  checks.length = 0;
+  await autoCheck();
+  assert.deepStrictEqual(checks, [], 'nothing can change before the reset');
+  assert.strictEqual(pausedUntil('a'), resets);
+  assert.strictEqual(pausedUntil('b'), null);
+  assert.ok(
+    card('a').notes.some((n) => /^as of .* · paused until it resets$/.test(n)),
+    card('a').notes.join(' | ')
+  );
+  await commands.get('claudeAccounts.refreshAccount')('a');
+  assert.deepStrictEqual(checks, ['a']);
+
+  // The window reset: it counts from zero and is checked again.
+  saved('a', Date.now() - 20 * MINUTE, 100, { resets: Date.now() - 1000 });
+  checks.length = 0;
+  await refreshQuota(env.load('accounts').findAccount('a'));
+  assert.strictEqual(pausedUntil('a'), null);
+  await autoCheck();
+  assert.deepStrictEqual(checks, ['a']);
+});
+
+test('used up: the longest window counts, paid extra usage keeps it checked, and off means no pause', async () => {
+  const quota = env.load('quota');
+  const weekly = Date.now() + 3 * 864e5;
+  saved('a', Date.now() - 20 * MINUTE, 100, { seven: { utilization: 100, resets_at: new Date(weekly).toISOString() } });
+  await quota.refreshAllQuota();
+  assert.strictEqual(quota.pausedUntil('a'), weekly);
+  env.settings.claudeAccounts.usageCheckMinutes = 0;
+  assert.ok(!card('a').notes.some((n) => /paused/.test(n)), 'nothing is checked on its own anyway');
+  env.settings.claudeAccounts.usageCheckMinutes = 5;
+
+  saved('a', Date.now() - 20 * MINUTE, 100, { extra: { is_enabled: true, used_credits: 100, monthly_limit: 1000, decimal_places: 2 } });
+  checks.length = 0;
+  await quota.autoCheck();
+  assert.deepStrictEqual(checks, ['a']);
 });
