@@ -737,6 +737,14 @@
           "default": 95,
           "markdownDescription": "%cfg.quotaThreshold%"
         },
+        "claudeAccounts.usageCheckMinutes": {
+          "order": 23,
+          "scope": "application",
+          "type": "number",
+          "minimum": 0,
+          "default": 5,
+          "markdownDescription": "%cfg.usageCheckMinutes%"
+        },
         "claudeAccounts.shareHistory": {
           "order": 30,
           "scope": "application",

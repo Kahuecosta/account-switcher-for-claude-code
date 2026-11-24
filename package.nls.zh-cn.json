@@ -75,6 +75,7 @@
   "cfg.onUsageLimit.ignore": "不执行任何操作。",
   "cfg.liveQuota": "同时从 Claude Code 状态栏输入读取用量，在终端中运行 `claude` CLI 时更新更频繁。用量始终从 Claude Code 保存在每个账户 `.claude.json` 中的内容读取；此选项增加第二个来源。扩展会用一个脚本包装 `settings.json` 中的 `statusLine` 命令，该脚本保存输入后原样运行你自己的状态栏；关闭后会恢复。请使用[开启或关闭实时配额](command:claudeAccounts.toggleLiveQuota)。",
   "cfg.quotaThreshold": "当账户的 5 小时或每周用量达到此百分比时视为已达限制，以便在 Claude Code 拒绝请求前切换。`0` 表示关闭。",
+  "cfg.usageCheckMinutes": "使用窗口期间，每隔多少分钟让 Claude Code 检查每个已登录账户的套餐用量，使数字保持最新。每次检查会以该账户在后台启动 `claude` 程序几秒钟；不发送任何消息，因此不会消耗套餐用量。`0` 表示仅在刷新账户时检查。",
   "cfg.shareHistory": "所有账户使用 `~/.claude` 中相同的对话历史记录。请使用[在账户间共享历史记录](command:claudeAccounts.toggleHistorySharing)开启或关闭此功能：它会合并现有历史记录，而不是将其丢弃。",
   "cfg.historyItems": "视为历史记录的项：按文件夹划分的对话（projects）、提示历史记录（history.jsonl）、检查点（file-history）、待办事项（todos）和计划（plans）。",
   "cfg.sharedItemsMode": "共享配置文件账户通过链接使用 ~/.claude 中的哪些项。",

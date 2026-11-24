@@ -1,13 +1,18 @@
 'use strict';
 // Plan usage (5-hour and weekly windows) of every account. The main source is what Claude Code saves in
-// each account's .claude.json, read without changing anything. The opt-in status line bridge
+// each account's .claude.json, read without changing anything. Claude Code saves it when its panel starts
+// and when asked for the usage, not while a conversation goes on, so this module also asks it to, now and
+// then (claudeAccounts.usageCheckMinutes) and on Refresh. The opt-in status line bridge
 // (claudeAccounts.liveQuota) adds a fresher reading whenever the claude CLI draws its status line.
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { rt, cfg, DEFAULT_ID, baseDir, baseJsonPath, bridgeDir, notifyChanged } = require('./runtime');
+const { rt, cfg, DEFAULT_ID, baseDir, baseJsonPath, bridgeDir, storageDir, notifyChanged } = require('./runtime');
 const accounts = require('./accounts');
+const env = require('./environment');
+const cli = require('./cli');
 const statusline = require('../lib/statusline');
+const usageCheck = require('../lib/usageCheck');
 const { readCachedUsage, mergeQuota } = require('../lib/quota');
 
 /** @typedef {import('./accounts').Account} Account */
@@ -21,6 +26,10 @@ let watchers = [];
 let pending;
 // Claude Code writes .claude.json often, and it can be several MB: at most one read every few seconds.
 const DEBOUNCE_MS = 5000;
+// Claude Code keeps an answer for a minute: asking again sooner changes nothing.
+const ANSWER_KEPT_MS = 60e3;
+// After a failed check, how long the account is left alone (unless the user asks).
+const RETRY_MS = 15 * 60e3;
 
 const bridgeEnabled = () => !!cfg('liveQuota');
 /** @param {string} id @returns {Quota | null} */
@@ -48,6 +57,78 @@ async function refreshAllQuota() {
   for (const id of snapshots.keys()) if (!all.some((a) => a.id === id)) snapshots.delete(id);
   const results = await Promise.all(all.map((a) => refreshQuota(a).catch(() => ({ changed: false }))));
   if (results.some((r) => r.changed)) notifyChanged();
+}
+
+// ───────── asking Claude Code to check ─────────
+
+/** @type {Map<string, number>} */
+const failedAt = new Map();
+/** @type {Promise<any>} */
+let queue = Promise.resolve();
+let autoChecking = false;
+
+/** @param {Account} a */
+async function checkAccount(a) {
+  try {
+    if (accounts.secretsPending(a.id)) await accounts.loadSecrets(a.id);
+    await fs.promises.mkdir(storageDir(), { recursive: true });
+    await usageCheck.checkUsage(cli.claudeExecutable(), { env: env.terminalEnvFor(a), cwd: storageDir() });
+  } catch (e) {
+    rt.log.warn(`Usage check of ${a.id}: ${e instanceof Error ? e.message : e}`);
+  }
+  // What counts is what Claude Code saved, whatever it answered.
+  const { snap, changed } = await refreshQuota(a);
+  if (changed) notifyChanged();
+  return !!snap && typeof snap.at === 'number' && Date.now() - snap.at < 2 * ANSWER_KEPT_MS;
+}
+
+// One process at a time, the window's account first. Returns the accounts that could not be checked.
+/** @param {number} maxAgeMs @param {boolean} auto */
+async function checkEach(maxAgeMs, auto) {
+  const cur = accounts.selectedAccount().id;
+  const list = accounts
+    .allAccounts()
+    .filter((a) => a.kind === 'subscription' && accounts.isSignedIn(a) === true)
+    .sort((x, y) => Number(y.id === cur) - Number(x.id === cur));
+  /** @type {Account[]} */
+  const failed = [];
+  for (const a of list) {
+    if (auto && Date.now() - (failedAt.get(a.id) || 0) < RETRY_MS) continue;
+    // Read again first: the panel or another window may have had it checked meanwhile.
+    const { snap, changed } = await refreshQuota(a);
+    if (changed) notifyChanged();
+    if (snap && typeof snap.at === 'number' && Date.now() - snap.at < maxAgeMs) continue;
+    if (await checkAccount(a)) failedAt.delete(a.id);
+    else {
+      failedAt.set(a.id, Date.now());
+      failed.push(a);
+    }
+  }
+  return failed;
+}
+
+/**
+ * Has Claude Code check the usage of every signed-in subscription account (those just checked are skipped).
+ * @returns {Promise<Account[]>} the accounts that could not be checked
+ */
+function checkAll(maxAgeMs = ANSWER_KEPT_MS, auto = false) {
+  const run = queue.then(() => checkEach(maxAgeMs, auto));
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+// Run every minute and on focus: checks accounts whose reading is older than the setting, only while this
+// window is in use (which also keeps several windows from checking at the same time).
+async function autoCheck() {
+  const minutes = Number(cfg('usageCheckMinutes'));
+  const state = /** @type {{ focused: boolean, active?: boolean }} */ (vscode.window.state); // active: VS Code 1.89
+  if (!(minutes > 0) || !state.focused || state.active === false || autoChecking) return;
+  autoChecking = true;
+  try {
+    await checkAll(Math.max(minutes * 60e3, ANSWER_KEPT_MS), true);
+  } finally {
+    autoChecking = false;
+  }
 }
 
 // True when any account has usage figures (the status bar then refreshes relative times every minute).
@@ -162,6 +243,8 @@ module.exports = {
   jsonPathOf,
   refreshQuota,
   refreshAllQuota,
+  checkAll,
+  autoCheck,
   syncBridge,
   settingsTargets,
   watchSelected,

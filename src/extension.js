@@ -110,6 +110,7 @@ function activate(context) {
       scheduleUpdate();
       panel.schedule();
     }
+    background('usage check', quota.autoCheck);
   }, 60e3);
 
   limits.init({ select: switching.selectAccount, choose: () => commands.cmdSwitch() });
@@ -158,9 +159,7 @@ function activate(context) {
     reg('claudeAccounts.exportSettings', transfer.cmdExport),
     reg('claudeAccounts.importSettings', transfer.cmdImportSettings),
     reg('claudeAccounts.showLog', () => rt.log.show()),
-    reg('claudeAccounts.refresh', async () => {
-      await Promise.all([identity.refreshAllIdentities(), quota.refreshAllQuota(), health.refresh(), usage.refreshCurrentUsage()]);
-    }),
+    reg('claudeAccounts.refresh', () => vscode.window.withProgress({ location: { viewId: VIEW_ID } }, commands.cmdRefresh)),
     reg('claudeAccounts.continueInTerminal', async (arg) => {
       const a = arg ? commands.accountArg(arg) : await pickAccount(t('Continue the latest conversation as which account?'));
       if (a) await handoff.continueInTerminal(a);
@@ -236,7 +235,10 @@ function activate(context) {
         lastFocusRefresh = Date.now();
         background('sync', () => state.pullSynced() && changed.fire(undefined));
         background('identity', identity.refreshAllIdentities);
-        background('quota', quota.refreshAllQuota);
+        background('quota', async () => {
+          await quota.refreshAllQuota();
+          await quota.autoCheck();
+        });
         background('health', health.refresh);
       }
     })

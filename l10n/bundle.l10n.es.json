@@ -51,6 +51,7 @@
   "Claude Code account: {0}": "Cuenta de Claude Code: {0}",
   "Claude Code account: {0} ({1}).": "Cuenta de Claude Code: {0} ({1}).",
   "Claude Code account: {0}.": "Cuenta de Claude Code: {0}.",
+  "Claude Code could not check the usage of {0}.": "Claude Code no pudo revisar el uso de {0}.",
   "Claude login: {0}": "Inicio de sesión de Claude: {0}",
   "Claude subscription": "Suscripción de Claude",
   "Claude: {0}": "Claude: {0}",
