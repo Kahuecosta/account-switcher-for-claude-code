@@ -110,6 +110,8 @@ function activate(context) {
       scheduleUpdate();
       panel.schedule();
     }
+    background('usage check', () => quota.autoCheck());
+    background('sessions', usage.noteSessions);
   }, 60e3);
 
   limits.init({ select: switching.selectAccount, choose: () => commands.cmdSwitch() });
@@ -128,6 +130,7 @@ function activate(context) {
     { dispose: () => commands.stopLoginWatches() },
     { dispose: () => clearInterval(minuteTimer) },
     { dispose: () => refreshTimer && clearTimeout(refreshTimer) },
+    { dispose: () => statusBar.dispose() },
     { dispose: () => limits.dispose() },
     { dispose: () => quota.dispose() },
     { dispose: () => usage.dispose() },
@@ -158,9 +161,8 @@ function activate(context) {
     reg('claudeAccounts.exportSettings', transfer.cmdExport),
     reg('claudeAccounts.importSettings', transfer.cmdImportSettings),
     reg('claudeAccounts.showLog', () => rt.log.show()),
-    reg('claudeAccounts.refresh', async () => {
-      await Promise.all([identity.refreshAllIdentities(), quota.refreshAllQuota(), health.refresh(), usage.refreshCurrentUsage()]);
-    }),
+    reg('claudeAccounts.refresh', () => vscode.window.withProgress({ location: { viewId: VIEW_ID } }, commands.cmdRefresh)),
+    reg('claudeAccounts.refreshAccount', commands.cmdRefreshAccount),
     reg('claudeAccounts.continueInTerminal', async (arg) => {
       const a = arg ? commands.accountArg(arg) : await pickAccount(t('Continue the latest conversation as which account?'));
       if (a) await handoff.continueInTerminal(a);
@@ -218,8 +220,10 @@ function activate(context) {
       if (e.affectsConfiguration('claudeAccounts.rules') || e.affectsConfiguration('claudeAccounts.autoApplyRepoDefault')) {
         background('auto-apply', switching.autoApply);
       }
+      if (e.affectsConfiguration('claudeAccounts.usageBreakdown')) background('usage', usage.refreshCurrentUsage);
       background('health', health.refresh);
       scheduleUpdate();
+      panel.schedule();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       repo.detectRepos();
@@ -230,13 +234,17 @@ function activate(context) {
     vscode.window.onDidCloseTerminal((term) => commands.onTerminalClosed(term)),
     vscode.window.onDidChangeWindowState((s) => {
       if (!s.focused) return;
+      quota.noteUse();
       if (cfg('scope') === 'user') switching.syncFromStore();
       background('limits', limits.checkExpired);
       if (Date.now() - lastFocusRefresh > 60e3) {
         lastFocusRefresh = Date.now();
         background('sync', () => state.pullSynced() && changed.fire(undefined));
         background('identity', identity.refreshAllIdentities);
-        background('quota', quota.refreshAllQuota);
+        background('quota', async () => {
+          await quota.refreshAllQuota();
+          await quota.autoCheck();
+        });
         background('health', health.refresh);
       }
     })

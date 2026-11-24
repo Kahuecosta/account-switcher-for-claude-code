@@ -25,7 +25,7 @@ Out of scope: vulnerabilities in Claude Code itself (report them to [Anthropic](
 
 ## Design notes
 
-- The extension makes no network requests, except to gravatar.com when `claudeAccounts.gravatar` is on.
+- The extension makes no network requests, except to gravatar.com when `claudeAccounts.gravatar` is on. Usage checks (`claudeAccounts.usageCheckMinutes`) run the `claude` binary, which makes the request with its own login; the extension never sees a token.
 - It reads only `subscriptionType` and `rateLimitTier` from credential files, and keeps API keys and tokens in VS Code's secret storage.
 - Settings that change account folders can only be set in user settings, not by a workspace.
 - It never runs `git` or other tools in the workspace; repository information is read from `.git` files.

@@ -211,6 +211,33 @@ test('usage limits: documented messages, kinds and reset time', () => {
     }),
     'normal answers are not errors'
   );
+  // Claude Code 2.1.3xx says which window was rejected and when it resets; the text only names it.
+  const five = "You've hit your 5-hour limit · resets 10:30pm (America/Lima)";
+  const rejected = (rateLimitType, extra = {}) => ({ status: 'rejected', resetsAt: 1795491000, rateLimitType, ...extra });
+  assert.deepStrictEqual(limitInfo(err(five)), { kind: 'session', resetAt: null }, 'the text alone');
+  assert.deepStrictEqual(limitInfo(err(five, { error: 'rate_limit', quotaLimits: rejected('five_hour') })), {
+    kind: 'session',
+    resetAt: 1795491000000,
+  });
+  assert.deepStrictEqual(limitInfo(err('API Error', { apiErrorStatus: 429, apiErrorParams: { rate_limit_info: rejected('seven_day') } })), {
+    kind: 'weekly',
+    resetAt: 1795491000000,
+  });
+  assert.strictEqual(limitInfo(err('API Error', { apiErrorStatus: 429, quotaLimits: rejected('seven_day_opus') })).kind, 'model');
+  assert.strictEqual(limitInfo(err('API Error', { apiErrorStatus: 429, quotaLimits: rejected('overage') })).kind, 'spend');
+  assert.deepStrictEqual(
+    limitInfo(err("You've hit your weekly limit", { quotaLimits: rejected('a_new_window', { resetsAt: 'soon' }) })),
+    { kind: 'weekly', resetAt: null },
+    'unknown values fall back to the text'
+  );
+  assert.deepStrictEqual(
+    limitInfo(err('API Error', { apiErrorStatus: 429, quotaLimits: rejected('five_hour', { status: 'allowed' }) })),
+    { kind: 'unknown', resetAt: null },
+    'a window that was not rejected says nothing about this error'
+  );
+  assert.ok(
+    !isRateLimitEntry(err('Prompt is too long', { error: 'invalid_request', quotaLimits: rejected('five_hour', { status: 'allowed' }) }))
+  );
   assert.ok(!isRateLimitEntry(err('Prompt is too long', { error: 'invalid_request' })));
   assert.ok(!isRateLimitEntry(null));
   assert.strictEqual(encodeProjectDir('/home/u/my.repo'), '-home-u-my-repo');

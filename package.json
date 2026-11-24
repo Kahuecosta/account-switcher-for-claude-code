@@ -273,6 +273,12 @@
         "title": "%cmd.refresh%",
         "category": "%category%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeAccounts.refreshAccount",
+        "title": "%cmd.refreshAccount%",
+        "category": "%category%",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -705,6 +711,60 @@
           "default": true,
           "markdownDescription": "%cfg.showQuota%"
         },
+        "claudeAccounts.statusBarUsage": {
+          "order": 13,
+          "type": "string",
+          "enum": [
+            "window",
+            "both",
+            "all"
+          ],
+          "enumDescriptions": [
+            "%cfg.statusBarUsage.window%",
+            "%cfg.statusBarUsage.both%",
+            "%cfg.statusBarUsage.all%"
+          ],
+          "default": "window",
+          "description": "%cfg.statusBarUsage%"
+        },
+        "claudeAccounts.showOrganization": {
+          "order": 14,
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.showOrganization%"
+        },
+        "claudeAccounts.forecast": {
+          "order": 15,
+          "type": "string",
+          "enum": [
+            "off",
+            "weekly",
+            "both"
+          ],
+          "enumDescriptions": [
+            "%cfg.forecast.off%",
+            "%cfg.forecast.weekly%",
+            "%cfg.forecast.both%"
+          ],
+          "default": "weekly",
+          "description": "%cfg.forecast%"
+        },
+        "claudeAccounts.usageBreakdown": {
+          "order": 16,
+          "type": "string",
+          "enum": [
+            "off",
+            "project",
+            "conversation"
+          ],
+          "enumDescriptions": [
+            "%cfg.usageBreakdown.off%",
+            "%cfg.usageBreakdown.project%",
+            "%cfg.usageBreakdown.conversation%"
+          ],
+          "default": "off",
+          "description": "%cfg.usageBreakdown%"
+        },
         "claudeAccounts.onUsageLimit": {
           "order": 20,
           "type": "string",
@@ -736,6 +796,21 @@
           "maximum": 100,
           "default": 95,
           "markdownDescription": "%cfg.quotaThreshold%"
+        },
+        "claudeAccounts.usageCheckMinutes": {
+          "order": 23,
+          "scope": "application",
+          "type": "number",
+          "minimum": 0,
+          "default": 5,
+          "markdownDescription": "%cfg.usageCheckMinutes%"
+        },
+        "claudeAccounts.heavyConversationTokens": {
+          "order": 24,
+          "type": "number",
+          "minimum": 0,
+          "default": 300000,
+          "markdownDescription": "%cfg.heavyConversationTokens%"
         },
         "claudeAccounts.shareHistory": {
           "order": 30,

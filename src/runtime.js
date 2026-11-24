@@ -32,6 +32,8 @@ const K = {
   IMPORT_PROMPTED: 'importPrompted', // global
   RESUME: 'resumeConversation', // workspace: { id, account, at } to reopen after the reload
   RATING: 'ratingPrompt', // global: { first, switches, asked, lastAsked, done }
+  SAMPLES: 'usageSamples', // local: { [id]: [[at, 5-hour %, resetsAt]] }, the last 2 hours
+  SESSIONS: 'sessionAccounts', // local: { [session]: [[account id, since]] }, which account ran a conversation
   WRAPPER_PREV: 'previousProcessWrapper', // global: claudeCode.claudeProcessWrapper before per-chat accounts
 };
 

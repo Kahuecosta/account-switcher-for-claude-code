@@ -59,7 +59,8 @@ function identityLine(a) {
   if (a.kind && a.kind !== 'subscription') return accounts.kindLabel(a.kind);
   if (!id) return '';
   if (signedIn === false) return t('not logged in');
-  return [id.email, cfg('showPlan') ? id.plan : null, id.organization].filter(Boolean).join(' · ');
+  const organization = cfg('showOrganization') === false ? null : id.organization;
+  return [id.email, cfg('showPlan') ? id.plan : null, organization].filter(Boolean).join(' · ');
 }
 
 // ───────── avatars ─────────

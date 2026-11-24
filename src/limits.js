@@ -9,6 +9,7 @@ const accounts = require('./accounts');
 const quota = require('./quota');
 const usage = require('./usage');
 const handoff = require('./handoff');
+const heavy = require('./heavy');
 const { encodeProjectDir, limitInfo, TailReader } = require('../lib/usage');
 const { peakUsage } = require('../lib/statusline');
 const { isInside } = require('../lib/paths');
@@ -26,6 +27,8 @@ const lastPrompt = new Map();
 let watcher;
 /** @type {NodeJS.Timeout | undefined} */
 let timer;
+// The account whose limits are watched, and since when this window uses it (at first: since it started).
+let watched = { id: /** @type {string | null} */ (null), since: Date.now() };
 
 /** @type {(a: Account, reason: string, opts?: any) => Promise<any>} */
 let select = async () => undefined;
@@ -61,7 +64,10 @@ async function onLimitReached(account, info, { origin = 'log', pct, windowName, 
   let until = info.resetAt;
   if (!until) {
     const q = quota.quotaOf(account.id);
-    until = (info.kind === 'weekly' ? q?.sevenDay?.resetsAt : (q?.fiveHour?.resetsAt ?? q?.sevenDay?.resetsAt)) || null;
+    // A 5-hour limit never takes the weekly reset: without its own, it is assumed to last one window.
+    if (info.kind === 'weekly') until = q?.sevenDay?.resetsAt || null;
+    else if (info.kind === 'session') until = q?.fiveHour?.resetsAt || null;
+    else until = q?.fiveHour?.resetsAt || q?.sevenDay?.resetsAt || null;
   }
   await accounts.setLimit(account.id, { at: now, until, kind: info.kind });
   rt.log.info(`Limit (${origin}, ${info.kind}) for ${account.id}${until ? ` until ${new Date(until).toISOString()}` : ''}`);
@@ -137,6 +143,8 @@ function restartWatcher() {
   const folders = fileFolders();
   if (!folders.length) return;
   const account = accounts.selectedAccount();
+  if (watched.id !== account.id) watched = { id: account.id, since: watched.id === null ? watched.since : Date.now() };
+  const { since } = watched;
   const configDir = accounts.configDirOf(account);
   // The file watcher does not follow symlinks, so watch the real projects folder when it exists.
   let base;
@@ -156,14 +164,21 @@ function restartWatcher() {
   const tail = new TailReader();
   const onFile = async (/** @type {vscode.Uri} */ uri) => {
     usage.scheduleRefresh();
-    if (cfg('onUsageLimit') === 'ignore') return;
+    // With shared history the folder holds every window's conversations: only this one's count as its use.
+    if (encoded.some((e) => uri.fsPath.split(/[\\/]/).includes(e))) quota.noteUse();
     try {
       const now = Date.now();
-      for (const o of await tail.readNew(uri.fsPath)) {
+      const entries = await tail.readNew(uri.fsPath);
+      heavy.note(entries.filter((o) => belongsHere(o, uri.fsPath))).catch((e) => rt.log.warn(`Heavy conversation: ${e}`));
+      if (cfg('onUsageLimit') === 'ignore') return;
+      for (const o of entries) {
         const info = limitInfo(o);
         if (!info) continue;
         const ts = Date.parse(o.timestamp);
         if (Number.isFinite(ts) && now - ts > RECENT_MS) continue;
+        // A conversation goes along when the account changes (shared history, or a copy of it), with the
+        // limit the previous account hit: that one is not this account's.
+        if (Number.isFinite(ts) && ts < since) continue;
         if (!belongsHere(o, uri.fsPath)) continue;
         await onLimitReached(account, info, { file: uri.fsPath });
         break;
