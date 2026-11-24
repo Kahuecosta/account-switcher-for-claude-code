@@ -158,11 +158,10 @@ test('automatic checks: only old readings, only while the window is used, and ne
   const quota = env.load('quota');
   saved('a', Date.now() - 6 * MINUTE, 50);
   saved('b', Date.now() - 4 * MINUTE, 50);
-  env.vscode.window.state = { focused: false };
-  await quota.autoCheck();
+  // VS Code says "inactive" 10 seconds after the last key or click: that is not leaving the window.
   env.vscode.window.state = { focused: true, active: false };
-  await quota.autoCheck();
-  env.vscode.window.state = { focused: true, active: true };
+  await quota.autoCheck(Date.now() + 11 * MINUTE);
+  assert.deepStrictEqual(checks, [], 'left alone for a while');
   env.settings.claudeAccounts.usageCheckMinutes = 0;
   await quota.autoCheck();
   assert.deepStrictEqual(checks, []);
@@ -313,4 +312,42 @@ test('used up: the longest window counts, paid extra usage keeps it checked, and
   checks.length = 0;
   await quota.autoCheck();
   assert.deepStrictEqual(checks, ['a']);
+});
+
+// ───────── in use ─────────
+
+test('a window in the background checks only its own account, and only while Claude works in it', async () => {
+  const quota = env.load('quota');
+  const w = env.watchers.find((x) => !x.disposed && x.pattern.pattern.endsWith('*.jsonl'));
+  const { encodeProjectDir } = require('../../lib/usage');
+  const work = async (folder) => {
+    const file = path.join(dir('a'), 'projects', encodeProjectDir(folder), 's.jsonl');
+    write(file, '{}\n');
+    for (const h of w.handlers) await h({ fsPath: file });
+  };
+  const stale = () => ['a', 'b'].forEach((id) => saved(id, Date.now() - 10 * MINUTE, 50));
+  env.vscode.window.state = { focused: false };
+  stale();
+  checks.length = 0;
+  await work(home);
+  await quota.autoCheck();
+  assert.deepStrictEqual(checks, ['a']);
+
+  // Another window's conversations (shared history) do not count as using this one.
+  stale();
+  checks.length = 0;
+  const later = Date.now() + 11 * MINUTE;
+  const realNow = Date.now;
+  Date.now = () => later;
+  try {
+    await work('/somewhere/else');
+    await quota.autoCheck();
+    assert.deepStrictEqual(checks, []);
+    await work(home);
+    await quota.autoCheck();
+    assert.deepStrictEqual(checks, ['a']);
+  } finally {
+    Date.now = realNow;
+    env.vscode.window.state = { focused: true };
+  }
 });

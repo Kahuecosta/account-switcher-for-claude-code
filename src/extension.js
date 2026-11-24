@@ -230,6 +230,7 @@ function activate(context) {
     vscode.window.onDidCloseTerminal((term) => commands.onTerminalClosed(term)),
     vscode.window.onDidChangeWindowState((s) => {
       if (!s.focused) return;
+      quota.noteUse();
       if (cfg('scope') === 'user') switching.syncFromStore();
       background('limits', limits.checkExpired);
       if (Date.now() - lastFocusRefresh > 60e3) {

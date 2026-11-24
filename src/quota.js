@@ -164,14 +164,24 @@ function checkAll({ only, maxAgeMs = ANSWER_KEPT_MS, auto = false } = {}) {
 
 const autoChecks = () => Number(cfg('usageCheckMinutes')) > 0;
 
-// Run every minute and on focus: checks accounts whose reading is older than the setting, only while this
-// window is in use (which also keeps several windows from checking at the same time).
-async function autoCheck() {
+// VS Code calls a window inactive 10 seconds after the last key or click, and does not see those inside the
+// Claude Code panel. So a window counts as in use for a while after them, and after Claude worked in it.
+const IN_USE_MS = 10 * 60e3;
+let usedAt = Date.now();
+const noteUse = (now = Date.now()) => {
+  usedAt = Math.max(usedAt, now);
+};
+
+// Run every minute and on focus: checks accounts whose reading is older than the setting, while this window
+// is in use. In the background that is only its own account, the one Claude is using up.
+async function autoCheck(now = Date.now()) {
   const state = /** @type {{ focused: boolean, active?: boolean }} */ (vscode.window.state); // active: VS Code 1.89
-  if (!autoChecks() || !state.focused || state.active === false || autoChecking) return;
+  if (state.focused && state.active !== false) noteUse(now);
+  if (!autoChecks() || autoChecking || now - usedAt > IN_USE_MS) return;
   autoChecking = true;
   try {
-    await checkAll({ maxAgeMs: Math.max(Number(cfg('usageCheckMinutes')) * 60e3, ANSWER_KEPT_MS), auto: true });
+    const only = state.focused ? undefined : accounts.selectedAccount().id;
+    await checkAll({ only, maxAgeMs: Math.max(Number(cfg('usageCheckMinutes')) * 60e3, ANSWER_KEPT_MS), auto: true });
   } finally {
     autoChecking = false;
   }
@@ -292,6 +302,7 @@ module.exports = {
   checkAll,
   autoCheck,
   autoChecks,
+  noteUse,
   checkable,
   isChecking,
   pausedUntil,

@@ -156,6 +156,8 @@ function restartWatcher() {
   const tail = new TailReader();
   const onFile = async (/** @type {vscode.Uri} */ uri) => {
     usage.scheduleRefresh();
+    // With shared history the folder holds every window's conversations: only this one's count as its use.
+    if (encoded.some((e) => uri.fsPath.split(/[\\/]/).includes(e))) quota.noteUse();
     if (cfg('onUsageLimit') === 'ignore') return;
     try {
       const now = Date.now();
