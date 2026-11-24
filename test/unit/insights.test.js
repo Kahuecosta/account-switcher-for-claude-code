@@ -9,7 +9,7 @@ const { forecast } = require('../../lib/pace');
 const { UsageIndex, usedBy, contextOf, encodeProjectDir } = require('../../lib/usage');
 const { liveSessions } = require('../../lib/sessions');
 
-const env = setup({ shareHistory: true });
+const env = setup({ shareHistory: true, usageBreakdown: 'conversation', forecast: 'both' });
 const { context, home, write, messages, vscode } = env;
 test.after(env.dispose);
 
@@ -319,4 +319,82 @@ test('status bar: one window, both, or every account; a click on another account
     vscode.window.createStatusBarItem = orig;
     env.settings.claudeAccounts.statusBarUsage = 'window';
   }
+});
+
+// ───────── options ─────────
+
+test('forecast: for both windows, only the weekly one, or none', () => {
+  const quota = env.load('quota');
+  const known = () => {
+    const p = quota.paceOf('b', T0);
+    return [!!p.fiveHour, !!p.sevenDay];
+  };
+  assert.deepStrictEqual(known(), [true, true]);
+  env.settings.claudeAccounts.forecast = 'weekly';
+  assert.deepStrictEqual(known(), [false, true]);
+  const c = card('b');
+  assert.deepStrictEqual([c.windows[0].pace, /^At this pace/.test(c.windows[1].pace)], ['', true]);
+  env.settings.claudeAccounts.forecast = 'off';
+  assert.deepStrictEqual(known(), [false, false]);
+  const { configuration } = context.extension.packageJSON.contributes;
+  assert.strictEqual(configuration.properties['claudeAccounts.forecast'].default, 'weekly');
+});
+
+test('forecast: earlier readings are kept only when they are used', async () => {
+  const quota = env.load('quota');
+  const b = env.load('accounts').findAccount('b');
+  const count = () => env.stored('usageSamples').b.length;
+  const before = count();
+  env.settings.claudeAccounts.forecast = 'weekly';
+  saved('b', T0, 71, 90);
+  await quota.refreshQuota(b);
+  assert.strictEqual(count(), before);
+  env.settings.claudeAccounts.forecast = 'both';
+  await quota.refreshQuota(b);
+  assert.strictEqual(count(), before + 1);
+});
+
+test('what used it: by project shows folders only; off works nothing out', async () => {
+  const usage = env.load('usage');
+  env.settings.claudeAccounts.usageBreakdown = 'project';
+  const [five] = card('b').used;
+  assert.deepStrictEqual(
+    five.rows.map((r) => [r.project, r.title, r.context]),
+    [
+      ['beta', '', ''],
+      ['alpha', '', ''],
+    ]
+  );
+  env.settings.claudeAccounts.usageBreakdown = 'off';
+  assert.strictEqual(card('b').used, null);
+  const seen = JSON.stringify(env.stored('sessionAccounts'));
+  sessionFile('b', process.pid, 's77', T0);
+  usage.noteSessions();
+  assert.strictEqual(JSON.stringify(env.stored('sessionAccounts')), seen, 'not even which account runs what');
+  env.settings.claudeAccounts.usageBreakdown = 'conversation';
+  await usage.refreshCurrentUsage();
+  const { configuration } = context.extension.packageJSON.contributes;
+  assert.strictEqual(configuration.properties['claudeAccounts.usageBreakdown'].default, 'off');
+});
+
+test('what used it: the section is there before anything was recorded, and says so', async () => {
+  await env.load('state').update('sessionAccounts', {});
+  assert.deepStrictEqual(card('b').used, []);
+  const { html } = env.load('ui/panel');
+  assert.ok(html('x').includes('s.nothing'));
+  // With separate histories only the selected account's is read: the others have no section at all.
+  env.settings.claudeAccounts.shareHistory = false;
+  assert.strictEqual(card('b').used, null);
+  assert.ok(card('__default__').used.length, 'all of it is its own');
+  env.settings.claudeAccounts.shareHistory = true;
+});
+
+test('the organization can be hidden', async () => {
+  const identity = env.load('identity');
+  const b = env.load('accounts').findAccount('b');
+  await env.load('accounts').setIdentity('b', { email: 'x@x.com', organization: 'x@x.com Organization', plan: 'Pro', loggedIn: true });
+  assert.match(identity.identityLine(b), /Organization$/);
+  env.settings.claudeAccounts.showOrganization = false;
+  assert.strictEqual(identity.identityLine(b), 'x@x.com · Pro');
+  env.settings.claudeAccounts.showOrganization = true;
 });

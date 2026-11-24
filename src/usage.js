@@ -26,7 +26,8 @@ async function refreshCurrentUsage() {
   const a = accounts.selectedAccount();
   try {
     cache = { at: Date.now(), accountId: a.id, data: await computeUsage(a) };
-    conversations = { accountId: a.id, list: index.conversations(path.join(accounts.configDirOf(a), 'projects')) };
+    const list = breakdownMode() === 'off' ? [] : index.conversations(path.join(accounts.configDirOf(a), 'projects'));
+    conversations = { accountId: a.id, list };
     noteSessions();
     notifyChanged();
   } catch (e) {
@@ -50,12 +51,19 @@ const usageOf = (id) => (cache && cache.accountId === id ? cache.data : null);
 // Transcripts do not say it (a conversation keeps the account that started it), but every running claude
 // registers in its account's own folder. Seen every minute and remembered.
 
+/** @returns {'off' | 'project' | 'conversation'} */
+const breakdownMode = () => /** @type {any} */ (cfg('usageBreakdown')) || 'off';
+// With separate histories, only the selected account's is read.
+/** @param {string} id */
+const breakdownAvailable = (id) => breakdownMode() !== 'off' && (!!cfg('shareHistory') || conversations.accountId === id);
+
 /** @typedef {ReturnType<typeof usedBy> | null} Used */
 const MAX_SESSIONS = 400;
 /** @type {Record<string, [string, number][]>} */
 const NO_SESSIONS = {};
 
 function noteSessions() {
+  if (breakdownMode() === 'off') return;
   try {
     /** @type {Record<string, [string, number][]>} */
     const all = state.get(K.SESSIONS, {});
@@ -81,17 +89,18 @@ function noteSessions() {
 /** @param {string} id @returns {{ fiveHour: Used, sevenDay: Used } | null} */
 function usedByOf(id) {
   const q = quota.quotaOf(id);
+  const mode = breakdownMode();
   const shared = !!cfg('shareHistory');
-  if (!q || (!shared && conversations.accountId !== id)) return null;
+  if (!q || !breakdownAvailable(id)) return null;
   /** @type {Record<string, [string, number][]>} */
   const ran = shared ? state.get(K.SESSIONS, NO_SESSIONS) : NO_SESSIONS;
-  const deps = [conversations, shared, ran, q.fiveHour && q.fiveHour.resetsAt, q.sevenDay && q.sevenDay.resetsAt];
+  const deps = [mode, conversations, shared, ran, q.fiveHour && q.fiveHour.resetsAt, q.sevenDay && q.sevenDay.resetsAt];
   const kept = breakdowns.get(id);
   if (kept && kept.deps.every((d, i) => d === deps[i])) return kept.value;
   const owner = (/** @type {string} */ session, /** @type {number} */ ts) =>
     !shared || (ran[session] || []).filter((r) => r[1] <= ts).at(-1)?.[0] === id;
   const of = (/** @type {{ resetsAt: number | null } | null} */ w, /** @type {number} */ lengthMs) => {
-    const u = w && w.resetsAt ? usedBy(conversations.list, { from: w.resetsAt - lengthMs, owner }) : null;
+    const u = w && w.resetsAt ? usedBy(conversations.list, { from: w.resetsAt - lengthMs, owner, byProject: mode === 'project' }) : null;
     return u && u.rows.length ? u : null;
   };
   const fiveHour = of(q.fiveHour, 5 * 3600e3);
@@ -103,4 +112,14 @@ function usedByOf(id) {
 
 const dispose = () => debounce && clearTimeout(debounce);
 
-module.exports = { computeUsage, refreshCurrentUsage, scheduleRefresh, usageOf, noteSessions, usedByOf, dispose };
+module.exports = {
+  computeUsage,
+  refreshCurrentUsage,
+  scheduleRefresh,
+  usageOf,
+  noteSessions,
+  breakdownMode,
+  breakdownAvailable,
+  usedByOf,
+  dispose,
+};

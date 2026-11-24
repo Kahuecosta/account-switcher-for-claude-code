@@ -73,7 +73,7 @@ function update() {
   if (cur.kind && cur.kind !== 'subscription') line(f.md(accounts.kindLabel(cur.kind)));
   if (id?.email) line(f.md(t('E-mail: {0}', id.email)));
   if (id?.plan) line(f.md(t('Plan: {0}', id.plan)));
-  if (id?.organization) line(f.md(t('Organization: {0}', id.organization)));
+  if (id?.organization && cfg('showOrganization') !== false) line(f.md(t('Organization: {0}', id.organization)));
   if (accounts.isSignedIn(cur) === false) line(f.md(t('Not logged in')));
   line(f.md(t('Folder: {0}', accounts.configDirOf(cur))));
   line(f.md(t('Mode: {0}', accounts.modeLabel(cur.mode))));

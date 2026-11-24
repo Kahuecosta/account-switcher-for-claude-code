@@ -69,6 +69,7 @@ const SAMPLES_KEPT_MS = 2 * HOUR;
 
 /** @param {string} id @param {Quota | null} snap */
 function addSample(id, snap) {
+  if (cfg('forecast') !== 'both') return; // the weekly forecast needs no earlier readings
   const w = snap && snap.fiveHour;
   if (!w || !w.resetsAt || typeof snap.at !== 'number') return;
   const at = snap.at;
@@ -97,8 +98,11 @@ function paceOf(id, now = Date.now()) {
     .map((s) => ({ at: s[0], pct: s[1] }));
   return {
     fiveHour:
-      now - at < 20 * 60e3 ? forecast(fiveHour, { at, samples, lengthMs: 5 * HOUR, recentMs: 45 * 60e3, minSpanMs: 10 * 60e3 }) : null,
-    sevenDay: now - at < 6 * HOUR ? forecast(sevenDay, { at, lengthMs: 7 * 24 * HOUR, minSpanMs: 12 * HOUR }) : null,
+      cfg('forecast') === 'both' && now - at < 20 * 60e3
+        ? forecast(fiveHour, { at, samples, lengthMs: 5 * HOUR, recentMs: 45 * 60e3, minSpanMs: 10 * 60e3 })
+        : null,
+    sevenDay:
+      cfg('forecast') !== 'off' && now - at < 6 * HOUR ? forecast(sevenDay, { at, lengthMs: 7 * 24 * HOUR, minSpanMs: 12 * HOUR }) : null,
   };
 }
 

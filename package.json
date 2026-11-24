@@ -727,6 +727,44 @@
           "default": "window",
           "description": "%cfg.statusBarUsage%"
         },
+        "claudeAccounts.showOrganization": {
+          "order": 14,
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.showOrganization%"
+        },
+        "claudeAccounts.forecast": {
+          "order": 15,
+          "type": "string",
+          "enum": [
+            "off",
+            "weekly",
+            "both"
+          ],
+          "enumDescriptions": [
+            "%cfg.forecast.off%",
+            "%cfg.forecast.weekly%",
+            "%cfg.forecast.both%"
+          ],
+          "default": "weekly",
+          "description": "%cfg.forecast%"
+        },
+        "claudeAccounts.usageBreakdown": {
+          "order": 16,
+          "type": "string",
+          "enum": [
+            "off",
+            "project",
+            "conversation"
+          ],
+          "enumDescriptions": [
+            "%cfg.usageBreakdown.off%",
+            "%cfg.usageBreakdown.project%",
+            "%cfg.usageBreakdown.conversation%"
+          ],
+          "default": "off",
+          "description": "%cfg.usageBreakdown%"
+        },
         "claudeAccounts.onUsageLimit": {
           "order": 20,
           "type": "string",

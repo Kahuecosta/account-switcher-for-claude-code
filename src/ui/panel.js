@@ -75,9 +75,12 @@ function ageNote(id, at, now) {
   return quota.autoChecks() && quota.pausedUntil(id, now) ? `${age} · ${t('paused until it resets')}` : age;
 }
 
-// What used up the account's windows, by conversation.
+// What used up the account's windows, by project or conversation. Null when that is off; empty when nothing
+// was recorded yet.
 /** @param {string} id */
 function usedModel(id) {
+  if (!quota.quotaOf(id) || !usage.breakdownAvailable(id)) return null;
+  const byProject = usage.breakdownMode() === 'project';
   const used = usage.usedByOf(id);
   if (!used) return [];
   return /** @type {const} */ ([
@@ -91,7 +94,7 @@ function usedModel(id) {
             rows: u.rows.map((r) => ({
               share: `${Math.round(r.pct)}%`,
               project: r.cwd ? path.basename(r.cwd.replace(/[\\/]+$/, '').replace(/\\/g, '/')) : '?',
-              title: (r.title || r.session.slice(0, 8)).replace(/\s+/g, ' ').slice(0, 120),
+              title: byProject ? '' : (r.title || r.session.slice(0, 8)).replace(/\s+/g, ' ').slice(0, 120),
               context: r.context ? t('{0} per response', formatTokens(r.context)) : '',
               heavy: heavy.isHeavy(r.context),
             })),
@@ -171,6 +174,7 @@ function viewModel() {
       refresh: t('Refresh the usage of this account'),
       refreshing: t('Checking usage...'),
       used: t('What used it'),
+      nothing: t('Nothing recorded yet for this account'),
       usedTitle: t('Estimate: shares of what this computer used with the account'),
       heavy: t('Heavy conversation: /compact, or a new chat, makes your plan last longer'),
     },
@@ -360,12 +364,14 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
       else open.delete(c.id);
       vscode.setState({ open: Array.from(open) });
     });
+    if (!c.used.length) d.append(el('div', 'note', s.nothing));
     for (const w of c.used) {
       d.append(el('h4', '', w.label));
       for (const r of w.rows) {
         const row = el('div', 'use');
-        const what = el('span', 'what', r.project + ' · ' + r.title);
-        what.title = r.project + ' · ' + r.title;
+        const text = [r.project, r.title].filter(Boolean).join(' · ');
+        const what = el('span', 'what', text);
+        what.title = text;
         row.append(el('span', 'share', r.share), what);
         if (r.context) {
           const ctx = el('span', 'ctx' + (r.heavy ? ' heavy' : ''), (r.heavy ? '⚠ ' : '') + r.context);
@@ -392,7 +398,7 @@ button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:
     if (c.limit) li.append(el('div', 'limit', c.limit));
     for (const w of c.windows) li.append(meter(w));
     for (const n of c.notes) li.append(el('div', 'note', n));
-    if (c.used.length) li.append(usedSection(c, s));
+    if (c.used) li.append(usedSection(c, s));
     const actions = el('div', 'actions');
     if (c.loggedOut) actions.append(button(s.login, 'login', c.id, { primary: true }));
     if (!c.current) {

@@ -220,8 +220,10 @@ function activate(context) {
       if (e.affectsConfiguration('claudeAccounts.rules') || e.affectsConfiguration('claudeAccounts.autoApplyRepoDefault')) {
         background('auto-apply', switching.autoApply);
       }
+      if (e.affectsConfiguration('claudeAccounts.usageBreakdown')) background('usage', usage.refreshCurrentUsage);
       background('health', health.refresh);
       scheduleUpdate();
+      panel.schedule();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       repo.detectRepos();
