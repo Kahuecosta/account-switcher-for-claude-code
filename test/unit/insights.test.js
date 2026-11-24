@@ -114,6 +114,9 @@ test('contextOf: only responses of the conversation itself', () => {
 
 const sessionFile = (id, pid, session, startedAt) =>
   write(path.join(dir(id), 'sessions', `${pid}.json`), JSON.stringify({ pid, sessionId: session, startedAt, cwd: A }));
+// Each reading gets its own modification time: the file is read again only when that or its size
+// changes, and on Windows that time can stay the same for about 15 ms.
+let stamp = Date.now() - 3600e3;
 const saved = (id, at, five, seven = 20) => {
   const json = id === '__default__' ? path.join(home, '.claude.json') : path.join(dir(id), '.claude.json');
   write(
@@ -130,6 +133,8 @@ const saved = (id, at, five, seven = 20) => {
       },
     })
   );
+  stamp += 1000;
+  fs.utimesSync(json, stamp / 1000, stamp / 1000);
 };
 const card = (id) =>
   env

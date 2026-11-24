@@ -92,9 +92,13 @@ test('the real arguments: no customizations, no tools, no saved conversation', (
 
 /** Ids of the accounts checked, in order. @type {string[]} */
 const checks = [];
-const saved = (id, at, five, { resets = Date.now() + 3600e3, seven, extra } = {}) =>
+// Each reading gets its own modification time: the file is read again only when that or its size
+// changes, and on Windows that time can stay the same for about 15 ms.
+let stamp = Date.now() - 3600e3;
+const saved = (id, at, five, { resets = Date.now() + 3600e3, seven, extra } = {}) => {
+  const file = path.join(dir(id), '.claude.json');
   write(
-    path.join(dir(id), '.claude.json'),
+    file,
     JSON.stringify({
       oauthAccount: { accountUuid: id, emailAddress: `${id}@x.com` },
       cachedUsageUtilization:
@@ -111,6 +115,9 @@ const saved = (id, at, five, { resets = Date.now() + 3600e3, seven, extra } = {}
             },
     })
   );
+  stamp += 1000;
+  fs.utimesSync(file, stamp / 1000, stamp / 1000);
+};
 /** What the stand-in for Claude Code does with a check of the account. @type {(id: string) => boolean} */
 let claude = () => true;
 usageCheck.checkUsage = async (_exe, o) => {
